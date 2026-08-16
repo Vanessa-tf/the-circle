@@ -24,6 +24,8 @@ type CandidateCredit = {
   points: number;
   verified_by: string;
   awarded_at: string;
+  verifier_weight: number;
+  consistency_factor: number;
 };
 
 export default function CandidateProfile() {
@@ -40,7 +42,7 @@ export default function CandidateProfile() {
       supabase.from("profiles").select("full_name, role, location").eq("id", id).single(),
       supabase
         .from("credits")
-        .select("id, title, skill_category, points, verified_by, awarded_at")
+        .select("id, title, skill_category, points, verified_by, awarded_at, verifier_weight, consistency_factor")
         .eq("user_id", id)
         .order("awarded_at", { ascending: false }),
     ]).then(([profileRes, creditsRes]) => {
@@ -113,7 +115,7 @@ export default function CandidateProfile() {
               <ProjectItem
                 key={c.id}
                 title={c.title}
-                subtitle={`${c.verified_by} · ${formatShortDate(c.awarded_at)}`}
+                subtitle={`+${Math.round(weightedPoints(c))} pts · ${c.verified_by} · ${formatShortDate(c.awarded_at)}`}
               />
             ))}
           </>

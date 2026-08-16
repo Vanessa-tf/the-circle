@@ -1,21 +1,39 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors, radii } from "../constants/theme";
+import { weightedPoints } from "../constants/scoring";
 
 type Props = {
   title: string;
-  delta: string;
+  points: number;
+  skillCategory: string;
+  verifierWeight: number;
+  consistencyFactor: number;
   verifiedBy: string;
   org: string;
   date: string;
 };
 
-export default function CreditTimelineItem({ title, delta, verifiedBy, org, date }: Props) {
+export default function CreditTimelineItem({
+  title,
+  points,
+  skillCategory,
+  verifierWeight,
+  consistencyFactor,
+  verifiedBy,
+  org,
+  date,
+}: Props) {
+  const awarded = Math.round(weightedPoints({ points, verifier_weight: verifierWeight, consistency_factor: consistencyFactor }));
+  const isPlainRate = verifierWeight === 1 && consistencyFactor === 1;
+
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.delta}>{delta}</Text>
+        <Text style={styles.delta}>
+          +{awarded} {skillCategory}
+        </Text>
       </View>
       <View style={styles.metaRow}>
         <View style={styles.verifiedPill}>
@@ -25,6 +43,11 @@ export default function CreditTimelineItem({ title, delta, verifiedBy, org, date
           {org} · {date}
         </Text>
       </View>
+      {!isPlainRate && (
+        <Text style={styles.breakdown}>
+          {points} base · {verifierWeight.toFixed(2)}× verifier · {consistencyFactor.toFixed(2)}× consistency
+        </Text>
+      )}
     </View>
   );
 }
@@ -74,5 +97,10 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 12,
     color: colors.textMuted,
+  },
+  breakdown: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 8,
   },
 });

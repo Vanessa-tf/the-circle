@@ -11,6 +11,8 @@ export type Credit = {
   verified_by: string;
   org: string;
   awarded_at: string;
+  verifier_weight: number;
+  consistency_factor: number;
 };
 
 type CreditsContextValue = {
@@ -50,7 +52,7 @@ export function CreditsProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     const { data, error } = await supabase
       .from("credits")
-      .select("id, title, skill_category, points, verified_by, org, awarded_at")
+      .select("id, title, skill_category, points, verified_by, org, awarded_at, verifier_weight, consistency_factor")
       .eq("user_id", session.user.id)
       .order("awarded_at", { ascending: true });
 

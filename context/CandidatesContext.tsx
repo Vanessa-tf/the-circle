@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { SKILL_CATEGORIES, SkillCategory, verifierWeight } from "../constants/scoring";
+import { SKILL_CATEGORIES, SkillCategory, weightedPoints } from "../constants/scoring";
 
 export type Candidate = {
   id: string;
@@ -39,7 +39,7 @@ export function CandidatesProvider({ children }: { children: React.ReactNode }) 
         .from("profiles")
         .select("id, full_name, role, location, avatar_url")
         .eq("account_type", "Individual"),
-      supabase.from("credits").select("user_id, skill_category, points, verified_by"),
+      supabase.from("credits").select("user_id, skill_category, points, verifier_weight, consistency_factor"),
     ]);
 
     if (profilesRes.error) {
@@ -52,7 +52,7 @@ export function CandidatesProvider({ children }: { children: React.ReactNode }) 
     const totalsByUser = new Map<string, Record<SkillCategory, number>>();
     for (const row of creditsRes.data ?? []) {
       const totals = totalsByUser.get(row.user_id) ?? emptySkillTotals();
-      totals[row.skill_category as SkillCategory] += row.points * verifierWeight(row.verified_by);
+      totals[row.skill_category as SkillCategory] += weightedPoints(row);
       totalsByUser.set(row.user_id, totals);
     }
 

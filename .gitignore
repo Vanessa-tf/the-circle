@@ -44,3 +44,6 @@ yarn-error.*
 # Supabase CLI local runtime state
 supabase/.temp/
 supabase/.branches/
+
+# Edge Function secrets
+supabase/functions/.env

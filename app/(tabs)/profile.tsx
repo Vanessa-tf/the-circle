@@ -9,7 +9,7 @@ import SkillPill from "../../components/SkillPill";
 import ProjectItem from "../../components/ProjectItem";
 import { useAuth } from "../../context/AuthContext";
 import { useCredits } from "../../context/CreditsContext";
-import { SKILL_CATEGORIES } from "../../constants/scoring";
+import { SKILL_CATEGORIES, weightedPoints } from "../../constants/scoring";
 import { getInitials } from "../../lib/initials";
 import { formatShortDate } from "../../lib/formatDate";
 import { colors, radii } from "../../constants/theme";
@@ -34,7 +34,7 @@ export default function Profile() {
   const projects = timelineCredits.map((c) => ({
     id: c.id,
     title: c.title,
-    subtitle: `${c.verified_by} · ${formatShortDate(c.awarded_at)}`,
+    subtitle: `+${Math.round(weightedPoints(c))} pts · ${c.verified_by} · ${formatShortDate(c.awarded_at)}`,
   }));
 
   return (

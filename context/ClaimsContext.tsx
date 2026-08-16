@@ -23,13 +23,16 @@ export type NewClaimInput = {
   points: number;
   org: string;
   verified_by: string;
+  verifier_email: string;
 };
+
+export type SubmittedClaim = Claim & { emailSent: boolean };
 
 type ClaimsContextValue = {
   claims: Claim[];
   loading: boolean;
   refresh: () => Promise<void>;
-  submitClaim: (input: NewClaimInput) => Promise<Claim>;
+  submitClaim: (input: NewClaimInput) => Promise<SubmittedClaim>;
 };
 
 const ClaimsContext = createContext<ClaimsContextValue | undefined>(undefined);
@@ -77,7 +80,15 @@ export function ClaimsProvider({ children }: { children: React.ReactNode }) {
         .single();
       if (error) throw error;
       await fetchClaims();
-      return data as Claim;
+
+      const { error: fnError } = await supabase.functions.invoke("send-verification-email", {
+        body: { claimId: data.id },
+      });
+      if (fnError) {
+        console.warn("Failed to send verification email:", fnError.message);
+      }
+
+      return { ...(data as Claim), emailSent: !fnError };
     },
     [session, fetchClaims]
   );

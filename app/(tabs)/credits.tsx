@@ -33,7 +33,10 @@ export default function Credits() {
   const timeline = timelineCredits.map((c) => ({
     id: c.id,
     title: c.title,
-    delta: `+${c.points} ${c.skill_category}`,
+    points: c.points,
+    skillCategory: c.skill_category,
+    verifierWeight: c.verifier_weight,
+    consistencyFactor: c.consistency_factor,
     verifiedBy: c.verified_by,
     org: c.org,
     date: formatShortDate(c.awarded_at),

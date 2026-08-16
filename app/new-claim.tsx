@@ -18,6 +18,10 @@ import { useClaims } from "../context/ClaimsContext";
 import { SKILL_CATEGORIES, SkillCategory, VERIFIER_TYPES } from "../constants/scoring";
 import { colors, radii } from "../constants/theme";
 
+const EMAIL_RE = /^\S+@\S+\.\S+$/;
+
+type SentState = { emailSent: boolean; verifierEmail: string; shareLink: string };
+
 export default function NewClaim() {
   const { submitClaim } = useClaims();
 
@@ -26,9 +30,10 @@ export default function NewClaim() {
   const [points, setPoints] = useState("");
   const [org, setOrg] = useState("");
   const [verifiedBy, setVerifiedBy] = useState<string | null>(null);
+  const [verifierEmail, setVerifierEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [sent, setSent] = useState<SentState | null>(null);
 
   const pointsNumber = Number(points);
   const canSubmit =
@@ -37,7 +42,8 @@ export default function NewClaim() {
     Number.isFinite(pointsNumber) &&
     pointsNumber > 0 &&
     org.trim().length > 0 &&
-    verifiedBy !== null;
+    verifiedBy !== null &&
+    EMAIL_RE.test(verifierEmail.trim());
 
   const onSubmit = async () => {
     if (!canSubmit || !skillCategory || !verifiedBy) return;
@@ -50,9 +56,14 @@ export default function NewClaim() {
         points: pointsNumber,
         org: org.trim(),
         verified_by: verifiedBy,
+        verifier_email: verifierEmail.trim(),
       });
       const baseUrl = process.env.EXPO_PUBLIC_APP_URL ?? "http://localhost:8081";
-      setShareLink(`${baseUrl}/verify/${claim.verify_token}`);
+      setSent({
+        emailSent: claim.emailSent,
+        verifierEmail: verifierEmail.trim(),
+        shareLink: `${baseUrl}/verify/${claim.verify_token}`,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
     } finally {
@@ -61,23 +72,42 @@ export default function NewClaim() {
   };
 
   const onShare = () => {
-    if (shareLink) Share.share({ message: shareLink });
+    if (sent) Share.share({ message: sent.shareLink });
   };
 
-  if (shareLink) {
+  if (sent?.emailSent) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.content}>
+          <Text style={styles.eyebrow}>REQUEST SENT</Text>
+          <Text style={styles.title}>Verification email sent</Text>
+          <Text style={styles.subtitle}>
+            We emailed {sent.verifierEmail} asking them to confirm this. You'll see it here once
+            they respond.
+          </Text>
+
+          <Pressable style={styles.submitButton} onPress={() => router.back()}>
+            <Text style={styles.submitText}>Done</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (sent) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.content}>
           <Text style={styles.eyebrow}>REQUEST SENT</Text>
           <Text style={styles.title}>Share this link with your verifier</Text>
           <Text style={styles.subtitle}>
-            Send it to whoever can vouch for this — your employer, university, or client. Once
-            they approve it, it'll show up as a real credit.
+            We couldn't send the verification email automatically, so share this link with{" "}
+            {sent.verifierEmail} yourself. Once they approve it, it'll show up as a real credit.
           </Text>
 
           <View style={styles.linkBox}>
             <Text style={styles.linkText} selectable numberOfLines={2}>
-              {shareLink}
+              {sent.shareLink}
             </Text>
           </View>
 
@@ -145,6 +175,15 @@ export default function NewClaim() {
             onChange={setVerifiedBy}
           />
 
+          <AuthTextField
+            label="Verifier's email"
+            value={verifierEmail}
+            onChangeText={setVerifierEmail}
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            placeholder="verifier@example.com"
+          />
+
           {error && <Text style={styles.error}>{error}</Text>}
 
           <Pressable
@@ -156,7 +195,7 @@ export default function NewClaim() {
             disabled={!canSubmit || submitting}
           >
             <Text style={styles.submitText}>
-              {submitting ? "Creating request…" : "Create verification link"}
+              {submitting ? "Sending…" : "Send verification request"}
             </Text>
           </Pressable>
         </ScrollView>

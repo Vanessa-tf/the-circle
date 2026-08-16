@@ -20,21 +20,14 @@ export const VERIFIER_TYPES = [
   "Peer verified",
 ] as const;
 
-// Company > Institution > Mentor > Peer, per the credibility hierarchy —
-// scales how much of a credit's points count toward Circle Score totals.
-export const VERIFIER_WEIGHTS: Record<(typeof VERIFIER_TYPES)[number], number> = {
-  "Employer verified": 1.0,
-  "Institution verified": 0.85,
-  "University verified": 0.85,
-  "Client verified": 0.6,
-  "Mentor verified": 0.45,
-  "Peer verified": 0.25,
-};
-
-export function verifierWeight(verifiedBy: string): number {
-  return VERIFIER_WEIGHTS[verifiedBy as (typeof VERIFIER_TYPES)[number]] ?? 1.0;
-}
-
-export function weightedPoints(credit: { points: number; verified_by: string }): number {
-  return credit.points * verifierWeight(credit.verified_by);
+// verifier_weight and consistency_factor are computed server-side at
+// approval time (see resolve_credit_claim / resolve_task_submission) and
+// frozen onto the credit row, so a credit's value never silently drifts
+// later just because someone's track record changed.
+export function weightedPoints(credit: {
+  points: number;
+  verifier_weight: number;
+  consistency_factor: number;
+}): number {
+  return credit.points * credit.verifier_weight * credit.consistency_factor;
 }
