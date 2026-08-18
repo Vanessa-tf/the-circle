@@ -29,6 +29,7 @@ export type Profile = {
   avatar_url: string | null;
   portfolio_url: string | null;
   account_type: AccountType;
+  phone_verified: boolean;
 };
 
 type AuthContextValue = {
@@ -46,6 +47,8 @@ type AuthContextValue = {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  startPhoneVerification: (phone: string) => Promise<void>;
+  confirmPhoneVerification: (phone: string, token: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -53,7 +56,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role, location, avatar_url, portfolio_url, account_type")
+    .select("id, full_name, role, location, avatar_url, portfolio_url, account_type, phone_verified")
     .eq("id", userId)
     .single();
 
@@ -163,6 +166,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(await fetchProfile(session.user.id));
   };
 
+  const startPhoneVerification = async (phone: string) => {
+    const { error } = await supabase.auth.updateUser({ phone });
+    if (error) throw error;
+  };
+
+  const confirmPhoneVerification = async (phone: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({ phone, token, type: "phone_change" });
+    if (error) throw error;
+    await refreshProfile();
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -175,6 +189,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signOut,
         refreshProfile,
+        startPhoneVerification,
+        confirmPhoneVerification,
       }}
     >
       {children}

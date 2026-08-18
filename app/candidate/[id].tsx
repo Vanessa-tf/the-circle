@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import SkillPill from "../../components/SkillPill";
 import ProjectItem from "../../components/ProjectItem";
+import ReliabilityCard, { FairnessSignals } from "../../components/ReliabilityCard";
 import { supabase } from "../../lib/supabase";
 import { SKILL_CATEGORIES, SkillCategory, weightedPoints } from "../../constants/scoring";
 import { getInitials } from "../../lib/initials";
@@ -32,6 +33,7 @@ export default function CandidateProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [credits, setCredits] = useState<CandidateCredit[]>([]);
+  const [signals, setSignals] = useState<FairnessSignals | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,10 +47,12 @@ export default function CandidateProfile() {
         .select("id, title, skill_category, points, verified_by, awarded_at, verifier_weight, consistency_factor")
         .eq("user_id", id)
         .order("awarded_at", { ascending: false }),
-    ]).then(([profileRes, creditsRes]) => {
+      supabase.rpc("get_fairness_signals", { p_user_id: id }),
+    ]).then(([profileRes, creditsRes, signalsRes]) => {
       if (!isMounted) return;
       setProfile(profileRes.data ?? null);
       setCredits((creditsRes.data ?? []) as CandidateCredit[]);
+      if (signalsRes.data && signalsRes.data.length > 0) setSignals(signalsRes.data[0]);
       setLoading(false);
     });
 
@@ -101,6 +105,12 @@ export default function CandidateProfile() {
                 <Text style={styles.statLabel}>VERIFICATIONS</Text>
               </View>
             </View>
+
+            {signals && (
+              <View style={styles.sectionSpacing}>
+                <ReliabilityCard signals={signals} />
+              </View>
+            )}
 
             <Text style={styles.sectionTitle}>Skills</Text>
             <View style={styles.skillsRow}>
@@ -211,6 +221,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.textPrimary,
     marginBottom: 16,
+  },
+  sectionSpacing: {
+    marginBottom: 24,
   },
   emptyText: {
     fontSize: 13,

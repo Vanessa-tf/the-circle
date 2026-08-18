@@ -58,6 +58,15 @@ export default function OrgTabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="members"
+          options={{
+            title: "Members",
+            tabBarButton: (props) => (
+              <TabBarButton {...props} iconName="users" label="Members" />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="profile"
           options={{
             title: "Profile",

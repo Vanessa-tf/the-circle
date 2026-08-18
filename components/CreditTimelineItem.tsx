@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors, radii } from "../constants/theme";
-import { weightedPoints } from "../constants/scoring";
+import { weightedPoints, decayFactor } from "../constants/scoring";
 
 type Props = {
   title: string;
@@ -9,6 +9,7 @@ type Props = {
   skillCategory: string;
   verifierWeight: number;
   consistencyFactor: number;
+  awardedAt: string;
   verifiedBy: string;
   org: string;
   date: string;
@@ -20,12 +21,21 @@ export default function CreditTimelineItem({
   skillCategory,
   verifierWeight,
   consistencyFactor,
+  awardedAt,
   verifiedBy,
   org,
   date,
 }: Props) {
-  const awarded = Math.round(weightedPoints({ points, verifier_weight: verifierWeight, consistency_factor: consistencyFactor }));
-  const isPlainRate = verifierWeight === 1 && consistencyFactor === 1;
+  const decay = decayFactor(awardedAt);
+  const awarded = Math.round(
+    weightedPoints({
+      points,
+      verifier_weight: verifierWeight,
+      consistency_factor: consistencyFactor,
+      awarded_at: awardedAt,
+    })
+  );
+  const isPlainRate = verifierWeight === 1 && consistencyFactor === 1 && decay === 1;
 
   return (
     <View style={styles.card}>
@@ -46,6 +56,7 @@ export default function CreditTimelineItem({
       {!isPlainRate && (
         <Text style={styles.breakdown}>
           {points} base · {verifierWeight.toFixed(2)}× verifier · {consistencyFactor.toFixed(2)}× consistency
+          {decay !== 1 ? ` · ${decay.toFixed(2)}× freshness` : ""}
         </Text>
       )}
     </View>

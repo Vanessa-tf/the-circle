@@ -8,6 +8,7 @@ import { ClaimsProvider } from "../context/ClaimsContext";
 import { ListingsProvider } from "../context/ListingsContext";
 import { MessagesProvider } from "../context/MessagesContext";
 import { TasksProvider } from "../context/TasksContext";
+import { AffiliationsProvider } from "../context/AffiliationsContext";
 import { colors } from "../constants/theme";
 
 function RootLayoutNav() {
@@ -30,25 +31,28 @@ function RootLayoutNav() {
         <ListingsProvider>
           <MessagesProvider>
             <TasksProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Protected guard={!!session && isIndividual}>
-                  <Stack.Screen name="(tabs)" />
-                  <Stack.Screen name="new-claim" options={{ presentation: "modal" }} />
-                  <Stack.Screen name="submit-task" options={{ presentation: "modal" }} />
-                </Stack.Protected>
-                <Stack.Protected guard={!!session && isOrg}>
-                  <Stack.Screen name="(org)" />
-                  <Stack.Screen name="new-task" options={{ presentation: "modal" }} />
-                </Stack.Protected>
-                <Stack.Protected guard={!session}>
-                  <Stack.Screen name="(auth)" />
-                </Stack.Protected>
-                <Stack.Protected guard={!!session}>
-                  <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
-                  <Stack.Screen name="candidate/[id]" />
-                </Stack.Protected>
-                <Stack.Screen name="verify/[token]" />
-              </Stack>
+              <AffiliationsProvider>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Protected guard={!!session && isIndividual}>
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="new-claim" options={{ presentation: "modal" }} />
+                    <Stack.Screen name="submit-task" options={{ presentation: "modal" }} />
+                    <Stack.Screen name="link-organization" options={{ presentation: "modal" }} />
+                  </Stack.Protected>
+                  <Stack.Protected guard={!!session && isOrg}>
+                    <Stack.Screen name="(org)" />
+                    <Stack.Screen name="new-task" options={{ presentation: "modal" }} />
+                  </Stack.Protected>
+                  <Stack.Protected guard={!session}>
+                    <Stack.Screen name="(auth)" />
+                  </Stack.Protected>
+                  <Stack.Protected guard={!!session}>
+                    <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
+                    <Stack.Screen name="candidate/[id]" />
+                  </Stack.Protected>
+                  <Stack.Screen name="verify/[token]" />
+                </Stack>
+              </AffiliationsProvider>
             </TasksProvider>
           </MessagesProvider>
         </ListingsProvider>

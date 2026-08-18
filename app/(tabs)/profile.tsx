@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -7,18 +7,32 @@ import ScoreLineChart from "../../components/ScoreLineChart";
 import ActivityHeatmap from "../../components/ActivityHeatmap";
 import SkillPill from "../../components/SkillPill";
 import ProjectItem from "../../components/ProjectItem";
+import ReliabilityCard, { FairnessSignals } from "../../components/ReliabilityCard";
 import { useAuth } from "../../context/AuthContext";
 import { useCredits } from "../../context/CreditsContext";
+import { useAffiliations } from "../../context/AffiliationsContext";
+import { supabase } from "../../lib/supabase";
 import { SKILL_CATEGORIES, weightedPoints } from "../../constants/scoring";
 import { getInitials } from "../../lib/initials";
 import { formatShortDate } from "../../lib/formatDate";
 import { colors, radii } from "../../constants/theme";
 
 export default function Profile() {
-  const { profile, signOut } = useAuth();
+  const { profile, session, signOut } = useAuth();
   const { totalScore, skillTotals, verificationsCount, scoreHistory, timelineCredits, credits } =
     useCredits();
+  const { myAffiliations } = useAffiliations();
+  const [signals, setSignals] = useState<FairnessSignals | null>(null);
   const roleLocation = [profile?.role, profile?.location].filter(Boolean).join(" · ");
+
+  useEffect(() => {
+    if (!session) return;
+    supabase
+      .rpc("get_fairness_signals", { p_user_id: session.user.id })
+      .then(({ data }) => {
+        if (data && data.length > 0) setSignals(data[0]);
+      });
+  }, [session]);
 
   const stats = [
     { value: String(totalScore), label: "CIRCLE SCORE", accent: true },
@@ -80,6 +94,12 @@ export default function Profile() {
           ))}
         </View>
 
+        {signals && (
+          <View style={styles.sectionSpacing}>
+            <ReliabilityCard signals={signals} />
+          </View>
+        )}
+
         <Text style={styles.sectionTitle}>Score growth</Text>
         <View style={styles.sectionSpacing}>
           <ScoreLineChart data={scoreHistory} />
@@ -96,6 +116,37 @@ export default function Profile() {
             <SkillPill key={skill.name} {...skill} />
           ))}
         </View>
+
+        <View style={styles.linkedRow}>
+          <Text style={styles.sectionTitle}>Linked organizations</Text>
+          <Pressable onPress={() => router.push("/link-organization")}>
+            <Text style={styles.linkText}>+ Link one</Text>
+          </Pressable>
+        </View>
+        {myAffiliations.length === 0 ? (
+          <Text style={styles.emptyText}>Not linked to any organization yet.</Text>
+        ) : (
+          myAffiliations.map((a) => (
+            <View key={a.id} style={styles.affiliationCard}>
+              <Text style={styles.affiliationName}>{a.org_name || "Unnamed organization"}</Text>
+              <View
+                style={[
+                  styles.affiliationPill,
+                  a.status !== "approved" && styles.affiliationPillMuted,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.affiliationPillText,
+                    a.status !== "approved" && styles.affiliationPillTextMuted,
+                  ]}
+                >
+                  {a.status === "approved" ? "Linked" : a.status === "pending" ? "Pending" : "Rejected"}
+                </Text>
+              </View>
+            </View>
+          ))
+        )}
 
         <Text style={styles.sectionTitle}>Verified projects</Text>
         {projects.map(({ id, ...project }) => (
@@ -237,5 +288,52 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
     marginBottom: 24,
+  },
+  linkedRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  linkText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.accentDark,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginBottom: 24,
+  },
+  affiliationCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: 16,
+    marginBottom: 12,
+  },
+  affiliationName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  affiliationPill: {
+    backgroundColor: colors.iconBgGreen,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+  },
+  affiliationPillMuted: {
+    backgroundColor: colors.iconBgGray,
+  },
+  affiliationPillText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.accentDark,
+  },
+  affiliationPillTextMuted: {
+    color: colors.textMuted,
   },
 });

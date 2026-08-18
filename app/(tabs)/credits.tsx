@@ -37,6 +37,7 @@ export default function Credits() {
     skillCategory: c.skill_category,
     verifierWeight: c.verifier_weight,
     consistencyFactor: c.consistency_factor,
+    awardedAt: c.awarded_at,
     verifiedBy: c.verified_by,
     org: c.org,
     date: formatShortDate(c.awarded_at),

@@ -39,7 +39,9 @@ export function CandidatesProvider({ children }: { children: React.ReactNode }) 
         .from("profiles")
         .select("id, full_name, role, location, avatar_url")
         .eq("account_type", "Individual"),
-      supabase.from("credits").select("user_id, skill_category, points, verifier_weight, consistency_factor"),
+      supabase
+        .from("credits")
+        .select("user_id, skill_category, points, verifier_weight, consistency_factor, awarded_at"),
     ]);
 
     if (profilesRes.error) {

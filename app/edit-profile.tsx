@@ -24,7 +24,7 @@ function draftKey(userId: string) {
 }
 
 export default function EditProfile() {
-  const { session, profile, refreshProfile } = useAuth();
+  const { session, profile, refreshProfile, startPhoneVerification, confirmPhoneVerification } = useAuth();
 
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [role, setRole] = useState(profile?.role ?? "");
@@ -33,6 +33,40 @@ export default function EditProfile() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const draftLoaded = useRef(false);
+
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [phoneBusy, setPhoneBusy] = useState(false);
+
+  const onSendCode = async () => {
+    setPhoneError(null);
+    setPhoneBusy(true);
+    try {
+      await startPhoneVerification(phone.trim());
+      setCodeSent(true);
+    } catch (e) {
+      setPhoneError(e instanceof Error ? e.message : "Couldn't send a code. Try again.");
+    } finally {
+      setPhoneBusy(false);
+    }
+  };
+
+  const onVerifyCode = async () => {
+    setPhoneError(null);
+    setPhoneBusy(true);
+    try {
+      await confirmPhoneVerification(phone.trim(), code.trim());
+      setCodeSent(false);
+      setPhone("");
+      setCode("");
+    } catch (e) {
+      setPhoneError(e instanceof Error ? e.message : "That code didn't work. Try again.");
+    } finally {
+      setPhoneBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!session) return;
@@ -122,6 +156,56 @@ export default function EditProfile() {
             placeholder="https://your-portfolio.com"
           />
 
+          <Text style={styles.sectionLabel}>Phone number</Text>
+          {profile?.phone_verified && !codeSent ? (
+            <View style={styles.verifiedRow}>
+              <Feather name="check-circle" size={16} color={colors.accentDark} />
+              <Text style={styles.verifiedRowText}>Phone verified</Text>
+              <Pressable onPress={() => setCodeSent(false)}>
+                <Text style={styles.changeLink}>Change</Text>
+              </Pressable>
+            </View>
+          ) : !codeSent ? (
+            <>
+              <AuthTextField
+                label="Number"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                placeholder="+1 415 555 1234"
+              />
+              {phoneError && <Text style={styles.error}>{phoneError}</Text>}
+              <Pressable
+                style={[styles.secondaryButton, (phoneBusy || !phone.trim()) && styles.saveButtonDisabled]}
+                onPress={onSendCode}
+                disabled={phoneBusy || !phone.trim()}
+              >
+                <Text style={styles.secondaryButtonText}>{phoneBusy ? "Sending…" : "Send code"}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <AuthTextField
+                label={`Code sent to ${phone.trim()}`}
+                value={code}
+                onChangeText={setCode}
+                keyboardType="number-pad"
+                placeholder="123456"
+              />
+              {phoneError && <Text style={styles.error}>{phoneError}</Text>}
+              <Pressable
+                style={[styles.secondaryButton, (phoneBusy || !code.trim()) && styles.saveButtonDisabled]}
+                onPress={onVerifyCode}
+                disabled={phoneBusy || !code.trim()}
+              >
+                <Text style={styles.secondaryButtonText}>{phoneBusy ? "Verifying…" : "Verify"}</Text>
+              </Pressable>
+              <Pressable onPress={() => setCodeSent(false)}>
+                <Text style={styles.changeLink}>Use a different number</Text>
+              </Pressable>
+            </>
+          )}
+
           {error && <Text style={styles.error}>{error}</Text>}
 
           <Pressable
@@ -174,6 +258,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#D9534F",
     marginBottom: 12,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  verifiedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.card,
+    borderRadius: radii.pill,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
+  verifiedRowText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  changeLink: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.accentDark,
+    marginBottom: 16,
+  },
+  secondaryButton: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingVertical: 14,
+    borderRadius: radii.pill,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textPrimary,
   },
   saveButton: {
     backgroundColor: colors.dark,

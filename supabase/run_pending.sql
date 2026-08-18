@@ -1,9 +1,10 @@
 -- Consolidated backlog: everything not yet applied to your Supabase project,
--- as of Phase 10. Run this ONCE in the SQL editor (Project > SQL Editor > New
+-- as of Phase 12. Run this ONCE in the SQL editor (Project > SQL Editor > New
 -- query). Checked against your live schema via the REST API before writing
 -- this: `schema.sql` (profiles + auth trigger) is already applied — this
 -- file covers credits.sql + claims.sql + listings.sql + profile_portfolio.sql
--- + organizations.sql + verification-email.sql + consistency-scoring.sql, in
+-- + organizations.sql + verification-email.sql + consistency-scoring.sql +
+-- fairness-signals.sql + phone-verification.sql + affiliations.sql, in
 -- dependency order. Safe to run even if some of it were already applied
 -- (every statement is idempotent: `if not exists`, `or replace`,
 -- `on conflict`).
@@ -586,6 +587,174 @@ begin
   end if;
 end;
 $$;
+
+-- =====================================================================
+-- From fairness-signals.sql
+-- =====================================================================
+
+create or replace function public.get_fairness_signals(p_user_id uuid)
+returns table (
+  peer_share numeric,
+  repeat_verifier boolean,
+  recent_rate numeric,
+  recent_n int,
+  prior_rate numeric,
+  prior_n int
+)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_total_weighted numeric;
+  v_peer_weighted numeric;
+begin
+  select
+    coalesce(sum(points * verifier_weight * consistency_factor), 0),
+    coalesce(sum(points * verifier_weight * consistency_factor) filter (where verified_by = 'Peer verified'), 0)
+  into v_total_weighted, v_peer_weighted
+  from public.credits
+  where user_id = p_user_id;
+
+  if v_total_weighted > 0 then
+    peer_share := v_peer_weighted / v_total_weighted;
+  else
+    peer_share := 0;
+  end if;
+
+  select exists (
+    select 1 from public.credit_claims
+    where user_id = p_user_id and status = 'approved' and verifier_email <> ''
+    group by verifier_email
+    having count(*) >= 3
+  ) into repeat_verifier;
+
+  with ordered as (
+    select status, row_number() over (order by resolved_at desc) as rn
+    from (
+      select status, resolved_at from public.credit_claims
+        where user_id = p_user_id and status in ('approved', 'rejected')
+      union all
+      select status, resolved_at from public.task_submissions
+        where user_id = p_user_id and status in ('approved', 'rejected')
+    ) combined
+  )
+  select
+    count(*) filter (where rn between 1 and 10 and status = 'approved')::numeric
+      / nullif(count(*) filter (where rn between 1 and 10), 0),
+    count(*) filter (where rn between 1 and 10),
+    count(*) filter (where rn between 11 and 20 and status = 'approved')::numeric
+      / nullif(count(*) filter (where rn between 11 and 20), 0),
+    count(*) filter (where rn between 11 and 20)
+  into recent_rate, recent_n, prior_rate, prior_n
+  from ordered;
+
+  return next;
+end;
+$$;
+
+grant execute on function public.get_fairness_signals(uuid) to authenticated;
+
+-- =====================================================================
+-- From phone-verification.sql
+-- =====================================================================
+
+alter table public.profiles
+  add column if not exists phone_verified boolean not null default false;
+
+create or replace function public.handle_phone_verified()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.profiles
+  set phone_verified = (new.phone_confirmed_at is not null)
+  where id = new.id;
+  return new;
+end;
+$$;
+
+create or replace trigger on_auth_user_phone_verified
+  after update of phone_confirmed_at on auth.users
+  for each row
+  when (old.phone_confirmed_at is distinct from new.phone_confirmed_at)
+  execute function public.handle_phone_verified();
+
+-- =====================================================================
+-- From affiliations.sql
+-- =====================================================================
+
+create table if not exists public.affiliations (
+  id uuid primary key default gen_random_uuid(),
+  individual_id uuid not null references auth.users (id) on delete cascade,
+  org_id uuid not null references auth.users (id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  requested_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  unique (individual_id, org_id)
+);
+
+alter table public.affiliations enable row level security;
+
+drop policy if exists "Individuals can read their own affiliation requests" on public.affiliations;
+create policy "Individuals can read their own affiliation requests"
+  on public.affiliations for select
+  using (auth.uid() = individual_id);
+
+drop policy if exists "Orgs can read affiliation requests sent to them" on public.affiliations;
+create policy "Orgs can read affiliation requests sent to them"
+  on public.affiliations for select
+  using (auth.uid() = org_id);
+
+drop policy if exists "Individuals can request affiliation with an org" on public.affiliations;
+create policy "Individuals can request affiliation with an org"
+  on public.affiliations for insert
+  with check (
+    auth.uid() = individual_id
+    and exists (
+      select 1 from public.profiles p
+      where p.id = org_id and p.account_type in ('Company', 'Institution')
+    )
+  );
+
+create or replace function public.resolve_affiliation(p_affiliation_id uuid, p_approve boolean)
+returns table (status text)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_affiliation record;
+begin
+  select * into v_affiliation from public.affiliations where id = p_affiliation_id for update;
+
+  if not found then
+    raise exception 'Affiliation request not found';
+  end if;
+
+  if v_affiliation.org_id <> auth.uid() then
+    raise exception 'Not authorized to resolve this affiliation request';
+  end if;
+
+  if v_affiliation.status <> 'pending' then
+    return query select v_affiliation.status;
+    return;
+  end if;
+
+  if p_approve then
+    update public.affiliations
+    set status = 'approved', resolved_at = now()
+    where id = v_affiliation.id;
+    return query select 'approved'::text;
+  else
+    update public.affiliations
+    set status = 'rejected', resolved_at = now()
+    where id = v_affiliation.id;
+    return query select 'rejected'::text;
+  end if;
+end;
+$$;
+
+grant execute on function public.resolve_affiliation(uuid, boolean) to authenticated;
 
 -- =====================================================================
 -- Optional: seed a few sample credits for a test account so the app has
