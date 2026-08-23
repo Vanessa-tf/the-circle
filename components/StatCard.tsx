@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { colors, radii } from "../constants/theme";
 
@@ -9,17 +9,19 @@ type Props = {
   iconColor: string;
   value: string;
   label: string;
+  onPress?: () => void;
 };
 
-export default function StatCard({ icon, iconBg, iconColor, value, label }: Props) {
+export default function StatCard({ icon, iconBg, iconColor, value, label, onPress }: Props) {
+  const Wrapper = onPress ? Pressable : View;
   return (
-    <View style={styles.card}>
+    <Wrapper style={styles.card} onPress={onPress}>
       <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
         <Feather name={icon} size={18} color={iconColor} />
       </View>
       <Text style={styles.value}>{value}</Text>
       <Text style={styles.label}>{label}</Text>
-    </View>
+    </Wrapper>
   );
 }
 

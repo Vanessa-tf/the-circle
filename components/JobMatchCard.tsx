@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { colors, radii } from "../constants/theme";
 
@@ -9,6 +9,8 @@ type Props = {
   matchPercent: number;
   score: string;
   verified?: boolean;
+  applied?: boolean;
+  onApply?: () => void;
 };
 
 export default function JobMatchCard({
@@ -17,6 +19,8 @@ export default function JobMatchCard({
   matchPercent,
   score,
   verified = true,
+  applied = false,
+  onApply,
 }: Props) {
   return (
     <View style={styles.card}>
@@ -38,6 +42,17 @@ export default function JobMatchCard({
           </View>
         )}
       </View>
+      {onApply && (
+        <Pressable
+          style={[styles.applyButton, applied && styles.applyButtonDisabled]}
+          onPress={onApply}
+          disabled={applied}
+        >
+          <Text style={[styles.applyText, applied && styles.applyTextDisabled]}>
+            {applied ? "✓ Applied" : "Apply"}
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -106,5 +121,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: colors.accentDark,
+  },
+  applyButton: {
+    marginTop: 12,
+    backgroundColor: colors.dark,
+    paddingVertical: 11,
+    borderRadius: radii.pill,
+    alignItems: "center",
+  },
+  applyButtonDisabled: {
+    backgroundColor: colors.iconBgGray,
+  },
+  applyText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  applyTextDisabled: {
+    color: colors.textSecondary,
   },
 });

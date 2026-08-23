@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { colors, radii } from "../constants/theme";
 
@@ -9,6 +9,7 @@ type Props = {
   subtitle: string;
   badgeLabel: string;
   badgeVariant?: "reward" | "action";
+  onPress?: () => void;
 };
 
 export default function TaskItem({
@@ -17,9 +18,10 @@ export default function TaskItem({
   subtitle,
   badgeLabel,
   badgeVariant = "reward",
+  onPress,
 }: Props) {
   return (
-    <View style={styles.row}>
+    <Pressable style={styles.row} onPress={onPress} disabled={!onPress}>
       <View style={[styles.checkCircle, done && styles.checkCircleDone]}>
         {done && <Feather name="check" size={14} color="#fff" />}
       </View>
@@ -32,7 +34,7 @@ export default function TaskItem({
           {badgeLabel}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

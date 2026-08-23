@@ -67,6 +67,24 @@ export default function OrgTabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="listings"
+          options={{
+            title: "Listings",
+            tabBarButton: (props) => (
+              <TabBarButton {...props} iconName="briefcase" label="Listings" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="messages"
+          options={{
+            title: "Messages",
+            tabBarButton: (props) => (
+              <TabBarButton {...props} iconName="message-circle" label="Messages" />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="profile"
           options={{
             title: "Profile",
@@ -74,6 +92,7 @@ export default function OrgTabsLayout() {
           }}
         />
         <Tabs.Screen name="task/[id]" options={{ href: null }} />
+        <Tabs.Screen name="listing/[id]" options={{ href: null }} />
       </Tabs>
     </CandidatesProvider>
   );

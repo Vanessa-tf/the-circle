@@ -1,42 +1,60 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
+import { router } from "expo-router";
 import CircularProgress from "./CircularProgress";
 import StatCard from "./StatCard";
 import ActivityItem from "./ActivityItem";
 import PerformanceScroller from "./PerformanceScroller";
 import { useCredits } from "../context/CreditsContext";
+import { useListings } from "../context/ListingsContext";
+import { useTasks } from "../context/TasksContext";
 import { SKILL_CATEGORIES, SKILL_TARGET } from "../constants/scoring";
 import { formatShortDate } from "../lib/formatDate";
 import { colors, radii } from "../constants/theme";
 
-const matchingStats = [
-  {
-    icon: "briefcase" as const,
-    iconBg: colors.iconBgGreen,
-    iconColor: colors.accentDark,
-    value: "12",
-    label: "Jobs match your score",
-  },
-  {
-    icon: "monitor" as const,
-    iconBg: colors.iconBgBlue,
-    iconColor: "#3B82C4",
-    value: "8",
-    label: "Freelance projects open",
-  },
-  {
-    icon: "tag" as const,
-    iconBg: colors.iconBgYellow,
-    iconColor: "#7A8C2E",
-    value: "3",
-    label: "Investors seeking founders",
-  },
-];
-
 const HERO_SCORE_TARGET = SKILL_TARGET * SKILL_CATEGORIES.length;
+
+function goToExplore(filter: string) {
+  router.push({ pathname: "/(tabs)/explore", params: { filter } });
+}
 
 export default function OverviewSection() {
   const { totalScore, skillTotals, thisWeekDelta, timelineCredits } = useCredits();
+  const { listings } = useListings();
+  const { tasks } = useTasks();
+
+  const openListings = listings.filter((l) => l.status === "open");
+  const jobsCount = openListings.filter((l) => l.category === "Jobs").length;
+  const freelanceCount = openListings.filter((l) => l.category === "Freelance").length;
+  const investorsCount = openListings.filter((l) => l.category === "Investors").length;
+  const totalOpportunities = tasks.length + openListings.length;
+
+  const matchingStats = [
+    {
+      icon: "briefcase" as const,
+      iconBg: colors.iconBgGreen,
+      iconColor: colors.accentDark,
+      value: String(jobsCount),
+      label: "Jobs match your score",
+      onPress: () => goToExplore("Jobs"),
+    },
+    {
+      icon: "monitor" as const,
+      iconBg: colors.iconBgBlue,
+      iconColor: "#3B82C4",
+      value: String(freelanceCount),
+      label: "Freelance projects open",
+      onPress: () => goToExplore("Freelance"),
+    },
+    {
+      icon: "tag" as const,
+      iconBg: colors.iconBgYellow,
+      iconColor: "#7A8C2E",
+      value: String(investorsCount),
+      label: "Investors seeking founders",
+      onPress: () => goToExplore("Investors"),
+    },
+  ];
 
   const performance = SKILL_CATEGORIES.map((category) => ({
     label: category,
@@ -56,7 +74,7 @@ export default function OverviewSection() {
         <View style={styles.heroTextWrap}>
           <Text style={styles.heroEyebrow}>THIS WEEK</Text>
           <Text style={styles.heroTitle}>Your credibility unlocked</Text>
-          <Text style={styles.heroHighlight}>38 opportunities</Text>
+          <Text style={styles.heroHighlight}>{totalOpportunities} opportunities</Text>
           <Text style={styles.heroSubtitle}>Circle Score up +{thisWeekDelta} this week</Text>
         </View>
         <CircularProgress
@@ -92,14 +110,16 @@ export default function OverviewSection() {
 
       <View style={styles.activityHeader}>
         <Text style={styles.sectionTitle}>Latest verified activity</Text>
-        <Pressable>
+        <Pressable onPress={() => router.push("/(tabs)/credits")}>
           <Text style={styles.seeAll}>See all</Text>
         </Pressable>
       </View>
 
-      {recentActivity.map((item) => (
-        <ActivityItem key={item.title} {...item} />
-      ))}
+      {recentActivity.length === 0 ? (
+        <Text style={styles.emptyText}>No verified activity yet.</Text>
+      ) : (
+        recentActivity.map((item) => <ActivityItem key={item.title} {...item} />)
+      )}
     </>
   );
 }
@@ -170,5 +190,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.accentDark,
     marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: colors.textMuted,
   },
 });

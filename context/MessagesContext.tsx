@@ -1,12 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
+import { useListings } from "./ListingsContext";
 import { getInitials } from "../lib/initials";
 import { colors } from "../constants/theme";
 
 export type MessageTarget = "credits" | "explore";
 
-export type Message = {
+export type Notification = {
   id: string;
   senderName: string;
   initials: string;
@@ -18,8 +19,21 @@ export type Message = {
   target: MessageTarget;
 };
 
+export type Conversation = {
+  applicationId: string;
+  otherPartyName: string;
+  initials: string;
+  avatarColor: string;
+  listingTitle: string;
+  listingCategory: string;
+  lastMessage: string | null;
+  lastMessageAt: string;
+  unreadCount: number;
+};
+
 type MessagesContextValue = {
-  messages: Message[];
+  notifications: Notification[];
+  conversations: Conversation[];
   loading: boolean;
   refresh: () => Promise<void>;
 };
@@ -34,93 +48,154 @@ function isRecent(iso: string): boolean {
 
 export function MessagesProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { myApplications, incomingApplications } = useListings();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchMessages = useCallback(async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!session) {
-      setMessages([]);
-      setLoading(false);
+      setNotifications([]);
       return;
     }
 
-    setLoading(true);
+    const { data, error } = await supabase
+      .from("credit_claims")
+      .select("id, title, skill_category, points, org, status, resolved_at")
+      .eq("user_id", session.user.id)
+      .neq("status", "pending");
 
-    const [claimsRes, applicationsRes] = await Promise.all([
-      supabase
-        .from("credit_claims")
-        .select("id, title, skill_category, points, org, status, resolved_at")
-        .eq("user_id", session.user.id)
-        .neq("status", "pending"),
-      supabase
-        .from("applications")
-        .select("id, applied_at, listing:listings(category, title, subtitle)")
-        .eq("user_id", session.user.id),
-    ]);
+    if (error) {
+      console.warn("Failed to fetch claims for notifications:", error.message);
+      setNotifications([]);
+      return;
+    }
 
-    type RawItem = Omit<Message, "initials" | "avatarColor">;
-    const items: RawItem[] = [];
-
-    if (claimsRes.error) {
-      console.warn("Failed to fetch claims for messages:", claimsRes.error.message);
-    } else {
-      for (const claim of claimsRes.data ?? []) {
-        if (!claim.resolved_at) continue;
+    const items = (data ?? [])
+      .filter((claim) => !!claim.resolved_at)
+      .map((claim, index) => {
         const approved = claim.status === "approved";
-        items.push({
+        return {
           id: `claim-${claim.id}`,
           senderName: claim.org,
+          initials: getInitials(claim.org),
+          avatarColor: index % 2 === 0 ? colors.dark : colors.accentDark,
           preview: approved
             ? `${claim.title} verified — +${claim.points} ${claim.skill_category} credits released.`
             : `Your claim for "${claim.title}" could not be verified.`,
           tag: approved ? "Verification · Approved" : "Verification · Not verified",
-          timestamp: claim.resolved_at,
-          unread: isRecent(claim.resolved_at),
-          target: "credits",
-        });
-      }
-    }
+          timestamp: claim.resolved_at as string,
+          unread: isRecent(claim.resolved_at as string),
+          target: "credits" as MessageTarget,
+        };
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-    if (applicationsRes.error) {
-      console.warn("Failed to fetch applications for messages:", applicationsRes.error.message);
-    } else {
-      for (const app of applicationsRes.data ?? []) {
-        const listing = app.listing as unknown as
-          | { category: string; title: string; subtitle: string }
-          | null;
-        if (!listing) continue;
-        const senderName =
-          listing.category === "Jobs" ? listing.subtitle.split(" · ")[0] : listing.title;
-        items.push({
-          id: `application-${app.id}`,
-          senderName,
-          preview: `Thanks for your interest in ${listing.title}. We'll be in touch.`,
-          tag: `${listing.category} · ${listing.title}`,
-          timestamp: app.applied_at,
-          unread: isRecent(app.applied_at),
-          target: "explore",
-        });
-      }
-    }
-
-    items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-    setMessages(
-      items.map((item, index) => ({
-        ...item,
-        initials: getInitials(item.senderName),
-        avatarColor: index % 2 === 0 ? colors.dark : colors.accentDark,
-      }))
-    );
-    setLoading(false);
+    setNotifications(items);
   }, [session]);
 
+  const fetchConversations = useCallback(async () => {
+    if (!session) {
+      setConversations([]);
+      return;
+    }
+
+    // Every application I'm a party to — either as the applicant or as the
+    // listing owner — is a potential conversation thread, whether or not
+    // any messages have been sent in it yet. Legacy listings with no owner
+    // have nobody on the other end, so they're skipped.
+    type Slot = { applicationId: string; otherPartyName: string; listingTitle: string; listingCategory: string };
+    const slots = new Map<string, Slot>();
+
+    const ownerIds = [...new Set(myApplications.map((a) => a.listing_owner_id).filter(Boolean))] as string[];
+    const nameByOwnerId = new Map<string, string>();
+    if (ownerIds.length > 0) {
+      const { data: owners } = await supabase.from("profiles").select("id, full_name").in("id", ownerIds);
+      for (const o of owners ?? []) {
+        if (o.full_name) nameByOwnerId.set(o.id, o.full_name);
+      }
+    }
+
+    for (const a of myApplications) {
+      if (!a.listing_owner_id) continue;
+      slots.set(a.id, {
+        applicationId: a.id,
+        otherPartyName: nameByOwnerId.get(a.listing_owner_id) ?? a.listing_title,
+        listingTitle: a.listing_title,
+        listingCategory: a.listing_category,
+      });
+    }
+    for (const a of incomingApplications) {
+      slots.set(a.id, {
+        applicationId: a.id,
+        otherPartyName: a.applicant_name ?? "Applicant",
+        listingTitle: a.listing_title,
+        listingCategory: "",
+      });
+    }
+
+    if (slots.size === 0) {
+      setConversations([]);
+      return;
+    }
+
+    const { data: messages, error } = await supabase
+      .from("messages")
+      .select("id, application_id, sender_id, body, created_at, read_at")
+      .in("application_id", [...slots.keys()])
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.warn("Failed to fetch messages:", error.message);
+    }
+
+    const lastByApp = new Map<string, { body: string; created_at: string }>();
+    const unreadByApp = new Map<string, number>();
+
+    for (const m of messages ?? []) {
+      lastByApp.set(m.application_id, { body: m.body, created_at: m.created_at });
+      if (m.sender_id !== session.user.id && !m.read_at) {
+        unreadByApp.set(m.application_id, (unreadByApp.get(m.application_id) ?? 0) + 1);
+      }
+    }
+
+    const list = [...slots.values()].map((slot, index) => {
+      const last = lastByApp.get(slot.applicationId);
+      return {
+        applicationId: slot.applicationId,
+        otherPartyName: slot.otherPartyName,
+        initials: getInitials(slot.otherPartyName),
+        avatarColor: index % 2 === 0 ? colors.dark : colors.accentDark,
+        listingTitle: slot.listingTitle,
+        listingCategory: slot.listingCategory,
+        lastMessage: last?.body ?? null,
+        lastMessageAt: last?.created_at ?? "",
+        unreadCount: unreadByApp.get(slot.applicationId) ?? 0,
+      };
+    });
+
+    list.sort((a, b) => {
+      if (!a.lastMessageAt) return 1;
+      if (!b.lastMessageAt) return -1;
+      return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+    });
+
+    setConversations(list);
+  }, [session, myApplications, incomingApplications]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([fetchNotifications(), fetchConversations()]);
+    setLoading(false);
+  }, [fetchNotifications, fetchConversations]);
+
   useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, myApplications, incomingApplications]);
 
   return (
-    <MessagesContext.Provider value={{ messages, loading, refresh: fetchMessages }}>
+    <MessagesContext.Provider value={{ notifications, conversations, loading, refresh }}>
       {children}
     </MessagesContext.Provider>
   );

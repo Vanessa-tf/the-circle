@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
+import { router } from "expo-router";
 import { colors, radii } from "../constants/theme";
 import TaskItem from "./TaskItem";
 import JobMatchCard from "./JobMatchCard";
@@ -14,9 +15,10 @@ export default function JobSearchSection() {
   const { claims } = useClaims();
   const { profile } = useAuth();
 
-  const jobListings = listingsByCategory.Jobs ?? [];
+  const jobListings = (listingsByCategory.Jobs ?? []).filter((l) => l.status === "open");
   const matches = jobListings
     .map((listing) => ({
+      id: listing.id,
       title: listing.title,
       subtitle: listing.subtitle,
       score: listing.metric_value,
@@ -33,10 +35,11 @@ export default function JobSearchSection() {
         jobListings.reduce((sum, l) => sum + (l.score_required ?? 0), 0) / jobListings.length
       )
     : 0;
+  const topMatchPercent = matches.length ? matches[0].matchPercent : null;
 
   const heroStats = [
     { value: String(appliedJobsCount), label: "APPLIED" },
-    { value: "0", label: "INTERVIEWS" },
+    { value: topMatchPercent !== null ? `${topMatchPercent}%` : "—", label: "TOP MATCH" },
     { value: `${avgRequired}+`, label: "AVG REQUIRED" },
   ];
 
@@ -45,6 +48,7 @@ export default function JobSearchSection() {
     subtitle: string;
     badgeLabel: string;
     badgeVariant: "reward" | "action";
+    onPress: () => void;
   }[] = [];
 
   if (!profile?.portfolio_url) {
@@ -53,6 +57,7 @@ export default function JobSearchSection() {
       subtitle: "Recruiters check this first",
       badgeLabel: "Add link",
       badgeVariant: "action",
+      onPress: () => router.push("/edit-profile"),
     });
   }
 
@@ -63,6 +68,7 @@ export default function JobSearchSection() {
       subtitle: `${claim.verified_by} pending`,
       badgeLabel: `+${claim.points} ${claim.skill_category}`,
       badgeVariant: "reward",
+      onPress: () => router.push("/(tabs)/credits"),
     });
   }
 
@@ -97,13 +103,24 @@ export default function JobSearchSection() {
 
       <View style={[styles.sectionHeader, styles.matchesHeader]}>
         <Text style={styles.sectionTitle}>Top matches for you</Text>
-        <Pressable>
+        <Pressable onPress={() => router.push({ pathname: "/(tabs)/explore", params: { filter: "Jobs" } })}>
           <Text style={styles.seeAll}>See all {jobListings.length}</Text>
         </Pressable>
       </View>
 
+      {matches.length === 0 && (
+        <Text style={styles.emptyText}>
+          No job matches yet — keep earning verified credits to unlock more roles.
+        </Text>
+      )}
+
       {matches.map((job) => (
-        <JobMatchCard key={job.title} {...job} />
+        <JobMatchCard
+          key={job.id}
+          {...job}
+          applied={isApplied(job.id)}
+          onApply={() => router.push(`/apply-listing?listingId=${job.id}`)}
+        />
       ))}
     </>
   );

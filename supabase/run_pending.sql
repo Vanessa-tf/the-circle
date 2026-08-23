@@ -1,13 +1,13 @@
 -- Consolidated backlog: everything not yet applied to your Supabase project,
--- as of Phase 12. Run this ONCE in the SQL editor (Project > SQL Editor > New
+-- as of Phase 13. Run this ONCE in the SQL editor (Project > SQL Editor > New
 -- query). Checked against your live schema via the REST API before writing
 -- this: `schema.sql` (profiles + auth trigger) is already applied — this
 -- file covers credits.sql + claims.sql + listings.sql + profile_portfolio.sql
 -- + organizations.sql + verification-email.sql + consistency-scoring.sql +
--- fairness-signals.sql + phone-verification.sql + affiliations.sql, in
--- dependency order. Safe to run even if some of it were already applied
--- (every statement is idempotent: `if not exists`, `or replace`,
--- `on conflict`).
+-- fairness-signals.sql + phone-verification.sql + affiliations.sql +
+-- listings-ownership.sql, in dependency order. Safe to run even if some of
+-- it were already applied (every statement is idempotent: `if not exists`,
+-- `or replace`, `on conflict`).
 --
 -- Phases 6 and 7 (Messages, Activity heatmap) needed no new SQL — they just
 -- read from what's created here.
@@ -190,16 +190,16 @@ create policy "Users can create their own applications"
 insert into public.listings
   (category, title, subtitle, metric_label, metric_value, secondary_label, secondary_value, secondary_value_accent, action_label, button_variant, score_required, score_required_category)
 values
-  ('Jobs', 'Product Analyst', 'Mavuno Health · Full-time · Remote', 'SCORE REQUIRED', '760+', 'SALARY', '$68-82k', false, 'Apply', 'dark', 760, null),
-  ('Jobs', 'Growth Lead', 'Sable Fintech · Hybrid · Nairobi', 'SCORE REQUIRED', '820+', 'SALARY', '$74-90k', false, 'Apply', 'dark', 820, null),
-  ('Jobs', 'UX Researcher', 'Northpine Labs · Contract', 'SCORE REQUIRED', '700+', 'SALARY', '$55/hr', false, 'Apply', 'dark', 700, null),
+  ('Jobs', 'Product Analyst', 'Mavuno Health · Full-time · Remote', 'SCORE REQUIRED', '760+', 'SALARY', 'R68-82k', false, 'Apply', 'dark', 760, null),
+  ('Jobs', 'Growth Lead', 'Sable Fintech · Hybrid · Nairobi', 'SCORE REQUIRED', '820+', 'SALARY', 'R74-90k', false, 'Apply', 'dark', 820, null),
+  ('Jobs', 'UX Researcher', 'Northpine Labs · Contract', 'SCORE REQUIRED', '700+', 'SALARY', 'R55/hr', false, 'Apply', 'dark', 700, null),
 
-  ('Freelance', 'Website Design', 'E-commerce redesign · 4 weeks', 'BUDGET', '$3,200', 'CREDITS REQUIRED', '120 Technical', true, 'Apply', 'accent', 120, 'Technical'),
-  ('Freelance', 'Brand Identity System', 'Logo, type, guidelines · 3 weeks', 'BUDGET', '$1,800', 'CREDITS REQUIRED', '80 Execution', true, 'Apply', 'accent', 80, 'Execution'),
-  ('Freelance', 'Sales Deck Rework', 'Series A pitch · 1 week', 'BUDGET', '$950', 'CREDITS REQUIRED', '60 Sales', true, 'Apply', 'accent', 60, 'Sales'),
+  ('Freelance', 'Website Design', 'E-commerce redesign · 4 weeks', 'BUDGET', 'R3,200', 'CREDITS REQUIRED', '120 Technical', true, 'Apply', 'accent', 120, 'Technical'),
+  ('Freelance', 'Brand Identity System', 'Logo, type, guidelines · 3 weeks', 'BUDGET', 'R1,800', 'CREDITS REQUIRED', '80 Execution', true, 'Apply', 'accent', 80, 'Execution'),
+  ('Freelance', 'Sales Deck Rework', 'Series A pitch · 1 week', 'BUDGET', 'R950', 'CREDITS REQUIRED', '60 Sales', true, 'Apply', 'accent', 60, 'Sales'),
 
-  ('Investors', 'Amara Ventures', 'Pre-seed & seed · Fintech, health', 'CHECK SIZE', '$50-250k', 'MIN FOUNDER SCORE', '840+', false, 'Pitch', 'dark', 840, null),
-  ('Investors', 'Baobab Capital', 'Seed · Marketplaces, SaaS', 'CHECK SIZE', '$100-500k', 'MIN FOUNDER SCORE', '860+', false, 'Pitch', 'dark', 860, null),
+  ('Investors', 'Amara Ventures', 'Pre-seed & seed · Fintech, health', 'CHECK SIZE', 'R50-250k', 'MIN FOUNDER SCORE', '840+', false, 'Pitch', 'dark', 840, null),
+  ('Investors', 'Baobab Capital', 'Seed · Marketplaces, SaaS', 'CHECK SIZE', 'R100-500k', 'MIN FOUNDER SCORE', '860+', false, 'Pitch', 'dark', 860, null),
 
   ('Startups', 'Kijani Energy', 'Solar micro-grids · Hiring 4 roles', 'TEAM SCORE AVG', '871', 'OPEN ROLES', '4', false, 'View', 'dark', null, null),
   ('Startups', 'Duka OS', 'Retail SaaS · Hiring 2 roles', 'TEAM SCORE AVG', '812', 'OPEN ROLES', '2', false, 'View', 'dark', null, null),
@@ -755,6 +755,197 @@ end;
 $$;
 
 grant execute on function public.resolve_affiliation(uuid, boolean) to authenticated;
+
+-- =====================================================================
+-- From listings-ownership.sql
+-- =====================================================================
+
+alter table public.listings
+  add column if not exists owner_id uuid references auth.users (id) on delete cascade,
+  add column if not exists status text not null default 'open' check (status in ('open', 'closed'));
+
+alter table public.applications
+  add column if not exists note text not null default '',
+  add column if not exists resolved_at timestamptz;
+
+alter table public.applications drop constraint if exists applications_status_check;
+alter table public.applications
+  add constraint applications_status_check check (status in ('applied', 'accepted', 'rejected'));
+
+drop policy if exists "Owners can create their own listings" on public.listings;
+create policy "Owners can create their own listings"
+  on public.listings for insert
+  with check (
+    auth.uid() = owner_id
+    and (
+      (category = 'Mentors' and exists (
+        select 1 from public.profiles p where p.id = auth.uid() and p.account_type = 'Individual'
+      ))
+      or (category <> 'Mentors' and exists (
+        select 1 from public.profiles p where p.id = auth.uid() and p.account_type in ('Company', 'Institution')
+      ))
+    )
+  );
+
+drop policy if exists "Owners can update their own listings" on public.listings;
+create policy "Owners can update their own listings"
+  on public.listings for update
+  using (auth.uid() = owner_id)
+  with check (auth.uid() = owner_id);
+
+drop policy if exists "Listing owners can read applications sent to them" on public.applications;
+create policy "Listing owners can read applications sent to them"
+  on public.applications for select
+  using (
+    exists (
+      select 1 from public.listings l
+      where l.id = applications.listing_id and l.owner_id = auth.uid()
+    )
+  );
+
+create or replace function public.resolve_application(p_application_id uuid, p_approve boolean)
+returns table (status text)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_application record;
+  v_listing record;
+begin
+  select * into v_application from public.applications where id = p_application_id for update;
+
+  if not found then
+    raise exception 'Application not found';
+  end if;
+
+  select * into v_listing from public.listings where id = v_application.listing_id;
+
+  if v_listing.owner_id is null or v_listing.owner_id <> auth.uid() then
+    raise exception 'Not authorized to resolve this application';
+  end if;
+
+  if v_application.status <> 'applied' then
+    return query select v_application.status;
+    return;
+  end if;
+
+  if p_approve then
+    update public.applications
+    set status = 'accepted', resolved_at = now()
+    where id = v_application.id;
+    return query select 'accepted'::text;
+  else
+    update public.applications
+    set status = 'rejected', resolved_at = now()
+    where id = v_application.id;
+    return query select 'rejected'::text;
+  end if;
+end;
+$$;
+
+grant execute on function public.resolve_application(uuid, boolean) to authenticated;
+
+-- Startup "View" shows real computed stats (team score avg, open roles)
+-- rather than trusting stored fake numbers. Affiliations RLS only lets the
+-- individual or the owning org read a given affiliation row, so an arbitrary
+-- browsing user can't aggregate another org's roster directly — this
+-- SECURITY DEFINER function returns just the aggregate, same pattern as the
+-- fairness-engine functions, without exposing individual affiliation rows.
+create or replace function public.get_startup_stats(p_owner_id uuid)
+returns table (team_score_avg numeric, member_count int, open_roles int)
+language sql
+security definer set search_path = public
+as $$
+  select
+    coalesce((
+      select avg(c.score)
+      from public.affiliations a
+      join (
+        select user_id, sum(points * verifier_weight * consistency_factor) as score
+        from public.credits
+        group by user_id
+      ) c on c.user_id = a.individual_id
+      where a.org_id = p_owner_id and a.status = 'approved'
+    ), 0)::numeric as team_score_avg,
+    (
+      select count(*)::int from public.affiliations a
+      where a.org_id = p_owner_id and a.status = 'approved'
+    ) as member_count,
+    (
+      select count(*)::int from public.listings l
+      where l.owner_id = p_owner_id and l.category = 'Jobs' and l.status = 'open'
+    ) as open_roles;
+$$;
+
+grant execute on function public.get_startup_stats(uuid) to authenticated;
+
+-- =====================================================================
+-- From listing-questions.sql
+-- =====================================================================
+
+alter table public.listings
+  add column if not exists questions text[] not null default '{}';
+
+alter table public.applications
+  add column if not exists answers jsonb not null default '[]'::jsonb;
+
+-- =====================================================================
+-- From messaging.sql
+-- =====================================================================
+
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  application_id uuid not null references public.applications (id) on delete cascade,
+  sender_id uuid not null references auth.users (id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+
+alter table public.messages enable row level security;
+
+create policy "Parties to an application can read its messages"
+  on public.messages for select
+  using (
+    exists (
+      select 1 from public.applications a
+      join public.listings l on l.id = a.listing_id
+      where a.id = messages.application_id
+        and (a.user_id = auth.uid() or l.owner_id = auth.uid())
+    )
+  );
+
+create policy "Parties to an application can send messages"
+  on public.messages for insert
+  with check (
+    sender_id = auth.uid()
+    and exists (
+      select 1 from public.applications a
+      join public.listings l on l.id = a.listing_id
+      where a.id = messages.application_id
+        and (a.user_id = auth.uid() or l.owner_id = auth.uid())
+    )
+  );
+
+create or replace function public.mark_messages_read(p_application_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.messages m
+  set read_at = now()
+  from public.applications a
+  join public.listings l on l.id = a.listing_id
+  where m.application_id = p_application_id
+    and a.id = p_application_id
+    and m.sender_id <> auth.uid()
+    and m.read_at is null
+    and (a.user_id = auth.uid() or l.owner_id = auth.uid());
+end;
+$$;
+
+grant execute on function public.mark_messages_read(uuid) to authenticated;
 
 -- =====================================================================
 -- Optional: seed a few sample credits for a test account so the app has

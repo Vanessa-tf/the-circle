@@ -11,6 +11,7 @@ import ReliabilityCard, { FairnessSignals } from "../../components/ReliabilityCa
 import { useAuth } from "../../context/AuthContext";
 import { useCredits } from "../../context/CreditsContext";
 import { useAffiliations } from "../../context/AffiliationsContext";
+import { useListings } from "../../context/ListingsContext";
 import { supabase } from "../../lib/supabase";
 import { SKILL_CATEGORIES, weightedPoints } from "../../constants/scoring";
 import { getInitials } from "../../lib/initials";
@@ -22,8 +23,24 @@ export default function Profile() {
   const { totalScore, skillTotals, verificationsCount, scoreHistory, timelineCredits, credits } =
     useCredits();
   const { myAffiliations } = useAffiliations();
+  const { myListings, incomingApplications, resolveApplication } = useListings();
   const [signals, setSignals] = useState<FairnessSignals | null>(null);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const roleLocation = [profile?.role, profile?.location].filter(Boolean).join(" · ");
+
+  const mentorListing = myListings.find((l) => l.category === "Mentors") ?? null;
+  const bookingRequests = mentorListing
+    ? incomingApplications.filter((a) => a.listing_id === mentorListing.id)
+    : [];
+
+  const onResolveBooking = async (applicationId: string, approve: boolean) => {
+    setResolvingId(applicationId);
+    try {
+      await resolveApplication(applicationId, approve);
+    } finally {
+      setResolvingId(null);
+    }
+  };
 
   useEffect(() => {
     if (!session) return;
@@ -146,6 +163,93 @@ export default function Profile() {
               </View>
             </View>
           ))
+        )}
+
+        <Text style={styles.sectionTitle}>Mentorship</Text>
+        {!mentorListing ? (
+          <Pressable
+            style={styles.mentorOptInCard}
+            onPress={() => router.push("/new-listing")}
+          >
+            <Text style={styles.mentorOptInTitle}>Become a mentor</Text>
+            <Text style={styles.mentorOptInSubtitle}>
+              List a session so others can book time with you.
+            </Text>
+          </Pressable>
+        ) : (
+          <>
+            <View style={styles.affiliationCard}>
+              <Text style={styles.affiliationName}>{mentorListing.title}</Text>
+              <View style={[styles.affiliationPill, mentorListing.status === "closed" && styles.affiliationPillMuted]}>
+                <Text
+                  style={[
+                    styles.affiliationPillText,
+                    mentorListing.status === "closed" && styles.affiliationPillTextMuted,
+                  ]}
+                >
+                  {mentorListing.status === "open" ? "Open" : "Closed"}
+                </Text>
+              </View>
+            </View>
+
+            {bookingRequests.length === 0 ? (
+              <Text style={styles.emptyText}>No booking requests yet.</Text>
+            ) : (
+              bookingRequests.map((a) => (
+                <View key={a.id} style={styles.bookingCard}>
+                  <Text style={styles.affiliationName}>{a.applicant_name ?? "Someone"}</Text>
+                  {a.answers.map((qa, i) => (
+                    <View key={i} style={styles.qaBlock}>
+                      <Text style={styles.question}>{qa.question}</Text>
+                      <Text style={styles.bookingNote}>{qa.answer}</Text>
+                    </View>
+                  ))}
+                  {a.note.length > 0 && <Text style={styles.bookingNote}>{a.note}</Text>}
+                  <Pressable
+                    style={styles.messageButton}
+                    onPress={() => router.push(`/conversation?applicationId=${a.id}`)}
+                  >
+                    <Feather name="message-circle" size={13} color={colors.textPrimary} />
+                    <Text style={styles.messageButtonText}>Message</Text>
+                  </Pressable>
+                  {a.status === "applied" ? (
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        style={[styles.approveButton, resolvingId === a.id && styles.buttonDisabled]}
+                        disabled={resolvingId === a.id}
+                        onPress={() => onResolveBooking(a.id, true)}
+                      >
+                        <Text style={styles.approveText}>Accept</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.rejectButton, resolvingId === a.id && styles.buttonDisabled]}
+                        disabled={resolvingId === a.id}
+                        onPress={() => onResolveBooking(a.id, false)}
+                      >
+                        <Text style={styles.rejectText}>Decline</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.affiliationPill,
+                        a.status === "rejected" && styles.affiliationPillMuted,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.affiliationPillText,
+                          a.status === "rejected" && styles.affiliationPillTextMuted,
+                        ]}
+                      >
+                        {a.status === "accepted" ? "Accepted" : "Declined"}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+          </>
         )}
 
         <Text style={styles.sectionTitle}>Verified projects</Text>
@@ -335,5 +439,95 @@ const styles = StyleSheet.create({
   },
   affiliationPillTextMuted: {
     color: colors.textMuted,
+  },
+  mentorOptInCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+  },
+  mentorOptInTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  mentorOptInSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  bookingCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: 16,
+    marginBottom: 12,
+  },
+  bookingNote: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  messageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 12,
+  },
+  messageButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textPrimary,
+  },
+  qaBlock: {
+    marginBottom: 4,
+  },
+  question: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textMuted,
+    marginTop: 6,
+    marginBottom: 3,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  approveButton: {
+    flex: 1,
+    backgroundColor: colors.dark,
+    paddingVertical: 12,
+    borderRadius: radii.pill,
+    alignItems: "center",
+  },
+  approveText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  rejectButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radii.pill,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rejectText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
 });

@@ -59,16 +59,16 @@ create policy "Users can create their own applications"
 insert into public.listings
   (category, title, subtitle, metric_label, metric_value, secondary_label, secondary_value, secondary_value_accent, action_label, button_variant, score_required, score_required_category)
 values
-  ('Jobs', 'Product Analyst', 'Mavuno Health · Full-time · Remote', 'SCORE REQUIRED', '760+', 'SALARY', '$68-82k', false, 'Apply', 'dark', 760, null),
-  ('Jobs', 'Growth Lead', 'Sable Fintech · Hybrid · Nairobi', 'SCORE REQUIRED', '820+', 'SALARY', '$74-90k', false, 'Apply', 'dark', 820, null),
-  ('Jobs', 'UX Researcher', 'Northpine Labs · Contract', 'SCORE REQUIRED', '700+', 'SALARY', '$55/hr', false, 'Apply', 'dark', 700, null),
+  ('Jobs', 'Product Analyst', 'Mavuno Health · Full-time · Remote', 'SCORE REQUIRED', '760+', 'SALARY', 'R68-82k', false, 'Apply', 'dark', 760, null),
+  ('Jobs', 'Growth Lead', 'Sable Fintech · Hybrid · Nairobi', 'SCORE REQUIRED', '820+', 'SALARY', 'R74-90k', false, 'Apply', 'dark', 820, null),
+  ('Jobs', 'UX Researcher', 'Northpine Labs · Contract', 'SCORE REQUIRED', '700+', 'SALARY', 'R55/hr', false, 'Apply', 'dark', 700, null),
 
-  ('Freelance', 'Website Design', 'E-commerce redesign · 4 weeks', 'BUDGET', '$3,200', 'CREDITS REQUIRED', '120 Technical', true, 'Apply', 'accent', 120, 'Technical'),
-  ('Freelance', 'Brand Identity System', 'Logo, type, guidelines · 3 weeks', 'BUDGET', '$1,800', 'CREDITS REQUIRED', '80 Execution', true, 'Apply', 'accent', 80, 'Execution'),
-  ('Freelance', 'Sales Deck Rework', 'Series A pitch · 1 week', 'BUDGET', '$950', 'CREDITS REQUIRED', '60 Sales', true, 'Apply', 'accent', 60, 'Sales'),
+  ('Freelance', 'Website Design', 'E-commerce redesign · 4 weeks', 'BUDGET', 'R3,200', 'CREDITS REQUIRED', '120 Technical', true, 'Apply', 'accent', 120, 'Technical'),
+  ('Freelance', 'Brand Identity System', 'Logo, type, guidelines · 3 weeks', 'BUDGET', 'R1,800', 'CREDITS REQUIRED', '80 Execution', true, 'Apply', 'accent', 80, 'Execution'),
+  ('Freelance', 'Sales Deck Rework', 'Series A pitch · 1 week', 'BUDGET', 'R950', 'CREDITS REQUIRED', '60 Sales', true, 'Apply', 'accent', 60, 'Sales'),
 
-  ('Investors', 'Amara Ventures', 'Pre-seed & seed · Fintech, health', 'CHECK SIZE', '$50-250k', 'MIN FOUNDER SCORE', '840+', false, 'Pitch', 'dark', 840, null),
-  ('Investors', 'Baobab Capital', 'Seed · Marketplaces, SaaS', 'CHECK SIZE', '$100-500k', 'MIN FOUNDER SCORE', '860+', false, 'Pitch', 'dark', 860, null),
+  ('Investors', 'Amara Ventures', 'Pre-seed & seed · Fintech, health', 'CHECK SIZE', 'R50-250k', 'MIN FOUNDER SCORE', '840+', false, 'Pitch', 'dark', 840, null),
+  ('Investors', 'Baobab Capital', 'Seed · Marketplaces, SaaS', 'CHECK SIZE', 'R100-500k', 'MIN FOUNDER SCORE', '860+', false, 'Pitch', 'dark', 860, null),
 
   ('Startups', 'Kijani Energy', 'Solar micro-grids · Hiring 4 roles', 'TEAM SCORE AVG', '871', 'OPEN ROLES', '4', false, 'View', 'dark', null, null),
   ('Startups', 'Duka OS', 'Retail SaaS · Hiring 2 roles', 'TEAM SCORE AVG', '812', 'OPEN ROLES', '2', false, 'View', 'dark', null, null),

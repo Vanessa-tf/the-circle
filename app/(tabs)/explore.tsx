@@ -1,15 +1,18 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import FilterPills from "../../components/FilterPills";
 import OpportunityCard from "../../components/OpportunityCard";
 import { useListings, Listing } from "../../context/ListingsContext";
 import { useCredits } from "../../context/CreditsContext";
 import { useTasks } from "../../context/TasksContext";
+import { supabase } from "../../lib/supabase";
 import { SkillCategory } from "../../constants/scoring";
 import { colors } from "../../constants/theme";
+
+type StartupStats = { team_score_avg: number; open_roles: number };
 
 const filters = ["Tasks", "Jobs", "Freelance", "Investors", "Startups", "Mentors"];
 
@@ -32,13 +35,44 @@ function getEligibility(
 }
 
 export default function Explore() {
-  const [filter, setFilter] = useState("Tasks");
-  const { listingsByCategory, isApplied, apply } = useListings();
+  const { filter: initialFilter } = useLocalSearchParams<{ filter?: string }>();
+  const [filter, setFilter] = useState(
+    initialFilter && filters.includes(initialFilter) ? initialFilter : "Tasks"
+  );
+  const { listingsByCategory, isApplied } = useListings();
   const { totalScore, skillTotals } = useCredits();
   const { tasks, mySubmissions } = useTasks();
+  const [startupStats, setStartupStats] = useState<Record<string, StartupStats>>({});
 
-  const visibleListings = listingsByCategory[filter] ?? [];
+  const visibleListings = (listingsByCategory[filter] ?? []).filter((l) => l.status === "open");
   const submittedTaskIds = new Set(mySubmissions.map((s) => s.task_id));
+  const startupListings = (listingsByCategory.Startups ?? []).filter((l) => l.status === "open");
+
+  useEffect(() => {
+    if (startupListings.length === 0) return;
+    let isMounted = true;
+    const ownerIds = [...new Set(startupListings.map((l) => l.owner_id).filter(Boolean))] as string[];
+
+    Promise.all(
+      ownerIds.map((ownerId) =>
+        supabase
+          .rpc("get_startup_stats", { p_owner_id: ownerId })
+          .then(({ data }) => [ownerId, data?.[0]] as const)
+      )
+    ).then((results) => {
+      if (!isMounted) return;
+      const next: Record<string, StartupStats> = {};
+      for (const [ownerId, stats] of results) {
+        if (stats) next[ownerId] = stats;
+      }
+      setStartupStats(next);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startupListings.map((l) => l.id).join(",")]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -77,6 +111,10 @@ export default function Explore() {
         {filter !== "Tasks" &&
           visibleListings.map((listing) => {
             const eligibility = getEligibility(listing, totalScore, skillTotals);
+            const isStartup = listing.category === "Startups";
+            const stats = isStartup && listing.owner_id ? startupStats[listing.owner_id] : undefined;
+            const metricValue = stats ? String(Math.round(stats.team_score_avg)) : listing.metric_value;
+            const secondaryValue = stats ? String(stats.open_roles) : listing.secondary_value;
             return (
               <OpportunityCard
                 key={listing.id}
@@ -84,14 +122,18 @@ export default function Explore() {
                 subtitle={listing.subtitle}
                 verified={listing.verified}
                 metricLabel={listing.metric_label}
-                metricValue={listing.metric_value}
+                metricValue={metricValue}
                 secondaryLabel={listing.secondary_label}
-                secondaryValue={listing.secondary_value}
+                secondaryValue={secondaryValue}
                 secondaryValueAccent={listing.secondary_value_accent}
                 actionLabel={listing.action_label}
                 buttonVariant={listing.button_variant}
-                applied={isApplied(listing.id)}
-                onPress={() => apply(listing.id)}
+                applied={!isStartup && isApplied(listing.id)}
+                onPress={() =>
+                  isStartup
+                    ? router.push(`/startup/${listing.id}`)
+                    : router.push(`/apply-listing?listingId=${listing.id}`)
+                }
                 eligibilityText={eligibility?.text}
                 eligibilityAccent={eligibility?.accent}
               />

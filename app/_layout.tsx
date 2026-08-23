@@ -38,10 +38,14 @@ function RootLayoutNav() {
                     <Stack.Screen name="new-claim" options={{ presentation: "modal" }} />
                     <Stack.Screen name="submit-task" options={{ presentation: "modal" }} />
                     <Stack.Screen name="link-organization" options={{ presentation: "modal" }} />
+                    <Stack.Screen name="new-listing" options={{ presentation: "modal" }} />
+                    <Stack.Screen name="apply-listing" options={{ presentation: "modal" }} />
+                    <Stack.Screen name="startup/[id]" />
                   </Stack.Protected>
                   <Stack.Protected guard={!!session && isOrg}>
                     <Stack.Screen name="(org)" />
                     <Stack.Screen name="new-task" options={{ presentation: "modal" }} />
+                    <Stack.Screen name="new-listing" options={{ presentation: "modal" }} />
                   </Stack.Protected>
                   <Stack.Protected guard={!session}>
                     <Stack.Screen name="(auth)" />
@@ -49,6 +53,7 @@ function RootLayoutNav() {
                   <Stack.Protected guard={!!session}>
                     <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
                     <Stack.Screen name="candidate/[id]" />
+                    <Stack.Screen name="conversation" />
                   </Stack.Protected>
                   <Stack.Screen name="verify/[token]" />
                 </Stack>
