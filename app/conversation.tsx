@@ -26,7 +26,10 @@ type Message = {
 };
 
 export default function Conversation() {
-  const { applicationId } = useLocalSearchParams<{ applicationId: string }>();
+  const { applicationId, conversationId } = useLocalSearchParams<{
+    applicationId?: string;
+    conversationId?: string;
+  }>();
   const { session } = useAuth();
   const [otherPartyName, setOtherPartyName] = useState<string>("");
   const [listingTitle, setListingTitle] = useState<string>("");
@@ -37,25 +40,34 @@ export default function Conversation() {
   const scrollRef = useRef<ScrollView>(null);
 
   const loadMessages = useCallback(async () => {
-    if (!applicationId) return;
-    const { data } = await supabase
-      .from("messages")
-      .select("id, sender_id, body, created_at")
-      .eq("application_id", applicationId)
-      .order("created_at", { ascending: true });
-    setMessages((data ?? []) as Message[]);
-  }, [applicationId]);
+    if (applicationId) {
+      const { data } = await supabase
+        .from("messages")
+        .select("id, sender_id, body, created_at")
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: true });
+      setMessages((data ?? []) as Message[]);
+    } else if (conversationId) {
+      const { data } = await supabase
+        .from("messages")
+        .select("id, sender_id, body, created_at")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
+      setMessages((data ?? []) as Message[]);
+    }
+  }, [applicationId, conversationId]);
 
   useEffect(() => {
     let isMounted = true;
-    if (!applicationId || !session) return;
+    if (!session || (!applicationId && !conversationId)) return;
 
-    supabase
-      .from("applications")
-      .select("id, user_id, listing:listings(title, owner_id)")
-      .eq("id", applicationId)
-      .single()
-      .then(async ({ data }) => {
+    const setup = async () => {
+      if (applicationId) {
+        const { data } = await supabase
+          .from("applications")
+          .select("id, user_id, listing:listings(title, owner_id)")
+          .eq("id", applicationId)
+          .single();
         if (!isMounted || !data) return;
         const listing = data.listing as unknown as { title: string; owner_id: string | null } | null;
         setListingTitle(listing?.title ?? "");
@@ -74,22 +86,46 @@ export default function Conversation() {
 
         await loadMessages();
         await supabase.rpc("mark_messages_read", { p_application_id: applicationId });
-        if (isMounted) setLoading(false);
-      });
+      } else if (conversationId) {
+        const { data } = await supabase
+          .from("conversations")
+          .select("user_a, user_b")
+          .eq("id", conversationId)
+          .single();
+        if (!isMounted || !data) return;
+        setListingTitle("");
+
+        const otherPartyId = data.user_a === session.user.id ? data.user_b : data.user_a;
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", otherPartyId)
+          .single();
+        if (isMounted) setOtherPartyName(profile?.full_name ?? "Conversation");
+
+        await loadMessages();
+        await supabase.rpc("mark_messages_read", { p_conversation_id: conversationId });
+      }
+      if (isMounted) setLoading(false);
+    };
+
+    setup();
 
     return () => {
       isMounted = false;
     };
-  }, [applicationId, session, loadMessages]);
+  }, [applicationId, conversationId, session, loadMessages]);
 
   const onSend = async () => {
     const body = draft.trim();
-    if (!body || !applicationId || !session) return;
+    if (!body || !session || (!applicationId && !conversationId)) return;
     setSending(true);
     setDraft("");
-    const { error } = await supabase
-      .from("messages")
-      .insert({ application_id: applicationId, sender_id: session.user.id, body });
+    const { error } = await supabase.from("messages").insert(
+      applicationId
+        ? { application_id: applicationId, sender_id: session.user.id, body }
+        : { conversation_id: conversationId, sender_id: session.user.id, body }
+    );
     if (error) {
       console.warn("Failed to send message:", error.message);
     } else {

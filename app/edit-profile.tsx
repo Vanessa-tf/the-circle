@@ -1,10 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import AuthTextField from "../components/AuthTextField";
+import Avatar from "../components/Avatar";
+import AvatarViewerModal from "../components/AvatarViewerModal";
+import { useProfileImagePicker } from "../hooks/useProfileImagePicker";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { colors, radii } from "../constants/theme";
@@ -32,7 +44,10 @@ export default function EditProfile() {
   const [portfolioUrl, setPortfolioUrl] = useState(profile?.portfolio_url ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [avatarViewerVisible, setAvatarViewerVisible] = useState(false);
   const draftLoaded = useRef(false);
+  const avatarPicker = useProfileImagePicker("avatar");
+  const bannerPicker = useProfileImagePicker("banner");
 
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -127,6 +142,33 @@ export default function EditProfile() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <Pressable style={styles.banner} onPress={bannerPicker.pick} disabled={bannerPicker.uploading}>
+            {profile?.banner_url ? (
+              <Image source={{ uri: profile.banner_url }} style={styles.bannerImage} />
+            ) : (
+              <View style={styles.bannerPlaceholder} />
+            )}
+            <View style={styles.bannerEditBadge}>
+              <Feather name="camera" size={13} color="#fff" />
+            </View>
+          </Pressable>
+
+          <View style={styles.avatarSection}>
+            <Pressable onPress={() => setAvatarViewerVisible(true)}>
+              <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
+              <View style={styles.avatarEditBadge}>
+                <Feather name="camera" size={14} color="#fff" />
+              </View>
+            </Pressable>
+            <Pressable onPress={avatarPicker.pick} disabled={avatarPicker.uploading}>
+              <Text style={styles.avatarChangeText}>
+                {avatarPicker.uploading ? "Uploading…" : "Change photo"}
+              </Text>
+            </Pressable>
+            {avatarPicker.error && <Text style={styles.error}>{avatarPicker.error}</Text>}
+            {bannerPicker.error && <Text style={styles.error}>{bannerPicker.error}</Text>}
+          </View>
+
           <AuthTextField
             label="Full name"
             value={fullName}
@@ -217,6 +259,18 @@ export default function EditProfile() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <AvatarViewerModal
+        visible={avatarViewerVisible}
+        name={profile?.full_name}
+        avatarUrl={profile?.avatar_url}
+        editable
+        uploading={avatarPicker.uploading}
+        onClose={() => setAvatarViewerVisible(false)}
+        onEdit={avatarPicker.pick}
+      />
+      {avatarPicker.cropModal}
+      {bannerPicker.cropModal}
     </SafeAreaView>
   );
 }
@@ -253,6 +307,58 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 32,
+  },
+  banner: {
+    width: "100%",
+    aspectRatio: 3,
+    borderRadius: radii.md,
+    overflow: "hidden",
+    backgroundColor: colors.card,
+    marginBottom: 16,
+  },
+  bannerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  bannerPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: colors.iconBgGray,
+  },
+  bannerEditBadge: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarSection: {
+    alignItems: "center",
+    marginBottom: 24,
+    marginTop: -44,
+  },
+  avatarEditBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.accentDark,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  avatarChangeText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.accentDark,
+    marginTop: 10,
   },
   error: {
     fontSize: 13,

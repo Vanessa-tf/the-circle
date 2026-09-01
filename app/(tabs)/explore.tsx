@@ -81,8 +81,8 @@ export default function Explore() {
           <Pressable style={styles.roundButton}>
             <Feather name="chevron-left" size={20} color={colors.textPrimary} />
           </Pressable>
-          <Pressable style={styles.roundButton}>
-            <Feather name="more-horizontal" size={20} color={colors.textPrimary} />
+          <Pressable style={styles.roundButton} onPress={() => router.push("/search")}>
+            <Feather name="search" size={18} color={colors.textPrimary} />
           </Pressable>
         </View>
 

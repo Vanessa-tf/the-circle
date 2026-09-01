@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, Image, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import SkillPill from "../../components/SkillPill";
 import ProjectItem from "../../components/ProjectItem";
 import ReliabilityCard, { FairnessSignals } from "../../components/ReliabilityCard";
+import Avatar from "../../components/Avatar";
+import AvatarViewerModal from "../../components/AvatarViewerModal";
 import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../context/AuthContext";
+import { useMessages } from "../../context/MessagesContext";
 import { SKILL_CATEGORIES, SkillCategory, weightedPoints } from "../../constants/scoring";
-import { getInitials } from "../../lib/initials";
 import { formatShortDate } from "../../lib/formatDate";
 import { colors, radii } from "../../constants/theme";
 
@@ -16,6 +19,8 @@ type CandidateProfile = {
   full_name: string | null;
   role: string | null;
   location: string | null;
+  avatar_url: string | null;
+  banner_url: string | null;
 };
 
 type CandidateCredit = {
@@ -41,7 +46,11 @@ export default function CandidateProfile() {
     if (!id) return;
 
     Promise.all([
-      supabase.from("profiles").select("full_name, role, location").eq("id", id).single(),
+      supabase
+        .from("profiles")
+        .select("full_name, role, location, avatar_url, banner_url")
+        .eq("id", id)
+        .single(),
       supabase
         .from("credits")
         .select("id, title, skill_category, points, verified_by, awarded_at, verifier_weight, consistency_factor")
@@ -71,10 +80,32 @@ export default function CandidateProfile() {
   }, {} as Record<SkillCategory, number>);
 
   const totalScore = Object.values(skillTotals).reduce((sum, v) => sum + v, 0);
+  const [avatarViewerVisible, setAvatarViewerVisible] = useState(false);
+  const [messaging, setMessaging] = useState(false);
+  const { session } = useAuth();
+  const { startConversation } = useMessages();
+  const isSelf = session?.user.id === id;
+
+  const onMessage = async () => {
+    if (!id || isSelf) return;
+    setMessaging(true);
+    try {
+      const conversationId = await startConversation(id);
+      router.push(`/conversation?conversationId=${conversationId}`);
+    } catch (e) {
+      console.warn("Failed to start conversation:", e instanceof Error ? e.message : e);
+    } finally {
+      setMessaging(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {profile?.banner_url && (
+          <Image source={{ uri: profile.banner_url }} style={styles.banner} />
+        )}
+
         <View style={styles.headerRow}>
           <Pressable style={styles.roundButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={colors.textPrimary} />
@@ -86,13 +117,19 @@ export default function CandidateProfile() {
         ) : (
           <>
             <View style={styles.identity}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{getInitials(profile?.full_name)}</Text>
-              </View>
+              <Pressable style={styles.avatarWrap} onPress={() => setAvatarViewerVisible(true)}>
+                <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
+              </Pressable>
               <Text style={styles.name}>{profile?.full_name || "Circle member"}</Text>
               <Text style={styles.role}>
                 {[profile?.role, profile?.location].filter(Boolean).join(" · ") || "No details yet"}
               </Text>
+              {!isSelf && (
+                <Pressable style={styles.messageButton} onPress={onMessage} disabled={messaging}>
+                  <Feather name="message-circle" size={14} color="#fff" />
+                  <Text style={styles.messageButtonText}>{messaging ? "Opening…" : "Message"}</Text>
+                </Pressable>
+              )}
             </View>
 
             <View style={styles.statsCard}>
@@ -131,6 +168,13 @@ export default function CandidateProfile() {
           </>
         )}
       </ScrollView>
+
+      <AvatarViewerModal
+        visible={avatarViewerVisible}
+        name={profile?.full_name}
+        avatarUrl={profile?.avatar_url}
+        onClose={() => setAvatarViewerVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -143,6 +187,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 32,
+  },
+  banner: {
+    width: "100%",
+    aspectRatio: 3,
+    borderRadius: radii.md,
   },
   headerRow: {
     flexDirection: "row",
@@ -161,19 +210,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: colors.dark,
-    alignItems: "center",
-    justifyContent: "center",
+  avatarWrap: {
     marginBottom: 16,
-  },
-  avatarText: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "700",
   },
   name: {
     fontSize: 22,
@@ -184,6 +222,21 @@ const styles = StyleSheet.create({
   role: {
     fontSize: 14,
     color: colors.textSecondary,
+    marginBottom: 14,
+  },
+  messageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.dark,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: radii.pill,
+  },
+  messageButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fff",
   },
   statsCard: {
     flexDirection: "row",

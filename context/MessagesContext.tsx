@@ -19,8 +19,11 @@ export type Notification = {
   target: MessageTarget;
 };
 
+export type ThreadType = "application" | "direct";
+
 export type Conversation = {
-  applicationId: string;
+  threadId: string;
+  threadType: ThreadType;
   otherPartyName: string;
   initials: string;
   avatarColor: string;
@@ -36,6 +39,7 @@ type MessagesContextValue = {
   conversations: Conversation[];
   loading: boolean;
   refresh: () => Promise<void>;
+  startConversation: (otherUserId: string) => Promise<string>;
 };
 
 const MessagesContext = createContext<MessagesContextValue | undefined>(undefined);
@@ -100,13 +104,19 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Every application I'm a party to — either as the applicant or as the
-    // listing owner — is a potential conversation thread, whether or not
-    // any messages have been sent in it yet. Legacy listings with no owner
-    // have nobody on the other end, so they're skipped.
-    type Slot = { applicationId: string; otherPartyName: string; listingTitle: string; listingCategory: string };
+    type Slot = {
+      threadId: string;
+      threadType: ThreadType;
+      otherPartyName: string;
+      listingTitle: string;
+      listingCategory: string;
+    };
     const slots = new Map<string, Slot>();
 
+    // Every application I'm a party to — either as the applicant or as the
+    // listing owner — is a potential thread, whether or not any messages
+    // have been sent yet. Legacy listings with no owner have nobody on the
+    // other end, so they're skipped.
     const ownerIds = [...new Set(myApplications.map((a) => a.listing_owner_id).filter(Boolean))] as string[];
     const nameByOwnerId = new Map<string, string>();
     if (ownerIds.length > 0) {
@@ -118,18 +128,51 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
 
     for (const a of myApplications) {
       if (!a.listing_owner_id) continue;
-      slots.set(a.id, {
-        applicationId: a.id,
+      slots.set(`application-${a.id}`, {
+        threadId: a.id,
+        threadType: "application",
         otherPartyName: nameByOwnerId.get(a.listing_owner_id) ?? a.listing_title,
         listingTitle: a.listing_title,
         listingCategory: a.listing_category,
       });
     }
     for (const a of incomingApplications) {
-      slots.set(a.id, {
-        applicationId: a.id,
+      slots.set(`application-${a.id}`, {
+        threadId: a.id,
+        threadType: "application",
         otherPartyName: a.applicant_name ?? "Applicant",
         listingTitle: a.listing_title,
+        listingCategory: "",
+      });
+    }
+
+    // Direct conversations — found via search, not tied to any application.
+    const { data: directRows } = await supabase
+      .from("conversations")
+      .select("id, user_a, user_b")
+      .or(`user_a.eq.${session.user.id},user_b.eq.${session.user.id}`);
+
+    const otherUserIds = (directRows ?? []).map((c) =>
+      c.user_a === session.user.id ? c.user_b : c.user_a
+    );
+    const nameByUserId = new Map<string, string>();
+    if (otherUserIds.length > 0) {
+      const { data: others } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", otherUserIds);
+      for (const o of others ?? []) {
+        if (o.full_name) nameByUserId.set(o.id, o.full_name);
+      }
+    }
+
+    for (const c of directRows ?? []) {
+      const otherId = c.user_a === session.user.id ? c.user_b : c.user_a;
+      slots.set(`direct-${c.id}`, {
+        threadId: c.id,
+        threadType: "direct",
+        otherPartyName: nameByUserId.get(otherId) ?? "Circle member",
+        listingTitle: "",
         listingCategory: "",
       });
     }
@@ -139,30 +182,49 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { data: messages, error } = await supabase
-      .from("messages")
-      .select("id, application_id, sender_id, body, created_at, read_at")
-      .in("application_id", [...slots.keys()])
-      .order("created_at", { ascending: true });
+    const applicationIds = [...slots.values()].filter((s) => s.threadType === "application").map((s) => s.threadId);
+    const conversationIds = [...slots.values()].filter((s) => s.threadType === "direct").map((s) => s.threadId);
 
-    if (error) {
-      console.warn("Failed to fetch messages:", error.message);
-    }
+    const [appMessages, directMessages] = await Promise.all([
+      applicationIds.length > 0
+        ? supabase
+            .from("messages")
+            .select("id, application_id, sender_id, body, created_at, read_at")
+            .in("application_id", applicationIds)
+            .order("created_at", { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+      conversationIds.length > 0
+        ? supabase
+            .from("messages")
+            .select("id, conversation_id, sender_id, body, created_at, read_at")
+            .in("conversation_id", conversationIds)
+            .order("created_at", { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
 
-    const lastByApp = new Map<string, { body: string; created_at: string }>();
-    const unreadByApp = new Map<string, number>();
+    const lastByThread = new Map<string, { body: string; created_at: string }>();
+    const unreadByThread = new Map<string, number>();
 
-    for (const m of messages ?? []) {
-      lastByApp.set(m.application_id, { body: m.body, created_at: m.created_at });
+    for (const m of appMessages.data ?? []) {
+      const key = `application-${m.application_id}`;
+      lastByThread.set(key, { body: m.body, created_at: m.created_at });
       if (m.sender_id !== session.user.id && !m.read_at) {
-        unreadByApp.set(m.application_id, (unreadByApp.get(m.application_id) ?? 0) + 1);
+        unreadByThread.set(key, (unreadByThread.get(key) ?? 0) + 1);
+      }
+    }
+    for (const m of directMessages.data ?? []) {
+      const key = `direct-${m.conversation_id}`;
+      lastByThread.set(key, { body: m.body, created_at: m.created_at });
+      if (m.sender_id !== session.user.id && !m.read_at) {
+        unreadByThread.set(key, (unreadByThread.get(key) ?? 0) + 1);
       }
     }
 
-    const list = [...slots.values()].map((slot, index) => {
-      const last = lastByApp.get(slot.applicationId);
+    const list = [...slots.entries()].map(([key, slot], index) => {
+      const last = lastByThread.get(key);
       return {
-        applicationId: slot.applicationId,
+        threadId: slot.threadId,
+        threadType: slot.threadType,
         otherPartyName: slot.otherPartyName,
         initials: getInitials(slot.otherPartyName),
         avatarColor: index % 2 === 0 ? colors.dark : colors.accentDark,
@@ -170,7 +232,7 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         listingCategory: slot.listingCategory,
         lastMessage: last?.body ?? null,
         lastMessageAt: last?.created_at ?? "",
-        unreadCount: unreadByApp.get(slot.applicationId) ?? 0,
+        unreadCount: unreadByThread.get(key) ?? 0,
       };
     });
 
@@ -194,8 +256,37 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, myApplications, incomingApplications]);
 
+  const startConversation = useCallback(
+    async (otherUserId: string) => {
+      if (!session) throw new Error("Not signed in");
+
+      const { data: existing } = await supabase
+        .from("conversations")
+        .select("id")
+        .or(
+          `and(user_a.eq.${session.user.id},user_b.eq.${otherUserId}),and(user_a.eq.${otherUserId},user_b.eq.${session.user.id})`
+        )
+        .maybeSingle();
+
+      if (existing) return existing.id as string;
+
+      const { data, error } = await supabase
+        .from("conversations")
+        .insert({ user_a: session.user.id, user_b: otherUserId })
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      await refresh();
+      return data.id as string;
+    },
+    [session, refresh]
+  );
+
   return (
-    <MessagesContext.Provider value={{ notifications, conversations, loading, refresh }}>
+    <MessagesContext.Provider
+      value={{ notifications, conversations, loading, refresh, startConversation }}
+    >
       {children}
     </MessagesContext.Provider>
   );

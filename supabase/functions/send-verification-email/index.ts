@@ -47,12 +47,18 @@ export default {
     const claimantName = profile?.full_name ?? "Someone on The Circle";
     const verifyUrl = `${APP_URL}/verify/${claim.verify_token}`;
     const hasCredentials = !!(SMTP_USER && SMTP_PASS);
+    // Port 465 expects TLS from the first byte; every other port (587, 25,
+    // Inbucket's 1025) expects a plaintext connection that upgrades via
+    // STARTTLS — denomailer negotiates that automatically unless disabled
+    // below, so tls:true here would break Gmail's 587 the same way it broke
+    // just now (TLS ClientHello sent where Gmail expected plaintext EHLO).
+    const useImplicitTls = SMTP_PORT === 465;
 
     const client = new SMTPClient({
       connection: {
         hostname: SMTP_HOST,
         port: SMTP_PORT,
-        tls: hasCredentials,
+        tls: useImplicitTls,
         auth: hasCredentials ? { username: SMTP_USER!, password: SMTP_PASS! } : undefined,
       },
       // Local Mailpit has no TLS/auth — only relax security when we're not

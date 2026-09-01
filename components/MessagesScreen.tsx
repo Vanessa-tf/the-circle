@@ -37,15 +37,25 @@ export default function MessagesScreen() {
               <>
                 {conversations.map((c) => (
                   <ConversationItem
-                    key={c.applicationId}
+                    key={`${c.threadType}-${c.threadId}`}
                     initials={c.initials}
                     avatarColor={c.avatarColor}
                     name={c.otherPartyName}
                     time={c.lastMessageAt ? formatRelativeTime(c.lastMessageAt) : ""}
                     unread={c.unreadCount > 0}
                     preview={c.lastMessage ?? "No messages yet — tap to start a conversation"}
-                    tag={c.listingCategory ? `${c.listingCategory} · ${c.listingTitle}` : c.listingTitle}
-                    onPress={() => router.push(`/conversation?applicationId=${c.applicationId}`)}
+                    tag={
+                      c.listingCategory
+                        ? `${c.listingCategory} · ${c.listingTitle}`
+                        : c.listingTitle || "Direct message"
+                    }
+                    onPress={() =>
+                      router.push(
+                        c.threadType === "application"
+                          ? `/conversation?applicationId=${c.threadId}`
+                          : `/conversation?conversationId=${c.threadId}`
+                      )
+                    }
                   />
                 ))}
               </>
