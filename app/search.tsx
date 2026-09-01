@@ -7,6 +7,8 @@ import AuthTextField from "../components/AuthTextField";
 import FilterPills from "../components/FilterPills";
 import Avatar from "../components/Avatar";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext";
+import { useMessages } from "../context/MessagesContext";
 import { colors, radii } from "../constants/theme";
 
 const FILTERS = ["All", "People", "Companies", "Jobs", "Freelance", "Investors", "Startups", "Mentors"];
@@ -30,6 +32,9 @@ export default function Search() {
   const [filter, setFilter] = useState("All");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [messagingId, setMessagingId] = useState<string | null>(null);
+  const { session } = useAuth();
+  const { startConversation } = useMessages();
 
   useEffect(() => {
     const q = sanitize(query);
@@ -112,6 +117,19 @@ export default function Search() {
     }
   };
 
+  const onMessage = async (result: SearchResult) => {
+    if (result.id === session?.user.id) return;
+    setMessagingId(result.id);
+    try {
+      const conversationId = await startConversation(result.id);
+      router.push(`/conversation?conversationId=${conversationId}`);
+    } catch (e) {
+      console.warn("Failed to start conversation:", e instanceof Error ? e.message : e);
+    } finally {
+      setMessagingId(null);
+    }
+  };
+
   const iconFor = (kind: string) => {
     switch (kind) {
       case "person":
@@ -177,6 +195,23 @@ export default function Search() {
                 <Text style={styles.resultTitle}>{result.title}</Text>
                 <Text style={styles.resultSubtitle}>{result.subtitle}</Text>
               </View>
+              {(result.kind === "person" || result.kind === "org") && result.id !== session?.user.id && (
+                <Pressable
+                  style={styles.messageIconButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onMessage(result);
+                  }}
+                  disabled={messagingId === result.id}
+                  hitSlop={8}
+                >
+                  <Feather
+                    name="message-circle"
+                    size={16}
+                    color={messagingId === result.id ? colors.textMuted : colors.accentDark}
+                  />
+                </Pressable>
+              )}
             </Pressable>
           ))}
       </ScrollView>
@@ -247,5 +282,13 @@ const styles = StyleSheet.create({
   resultSubtitle: {
     fontSize: 13,
     color: colors.textSecondary,
+  },
+  messageIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
   },
 });

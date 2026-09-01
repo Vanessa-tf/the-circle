@@ -9,6 +9,8 @@ import ReliabilityCard, { FairnessSignals } from "../../components/ReliabilityCa
 import Avatar from "../../components/Avatar";
 import AvatarViewerModal from "../../components/AvatarViewerModal";
 import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../context/AuthContext";
+import { useMessages } from "../../context/MessagesContext";
 import { SKILL_CATEGORIES, SkillCategory, weightedPoints } from "../../constants/scoring";
 import { formatShortDate } from "../../lib/formatDate";
 import { colors, radii } from "../../constants/theme";
@@ -79,6 +81,23 @@ export default function CandidateProfile() {
 
   const totalScore = Object.values(skillTotals).reduce((sum, v) => sum + v, 0);
   const [avatarViewerVisible, setAvatarViewerVisible] = useState(false);
+  const [messaging, setMessaging] = useState(false);
+  const { session } = useAuth();
+  const { startConversation } = useMessages();
+  const isSelf = session?.user.id === id;
+
+  const onMessage = async () => {
+    if (!id || isSelf) return;
+    setMessaging(true);
+    try {
+      const conversationId = await startConversation(id);
+      router.push(`/conversation?conversationId=${conversationId}`);
+    } catch (e) {
+      console.warn("Failed to start conversation:", e instanceof Error ? e.message : e);
+    } finally {
+      setMessaging(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -105,6 +124,12 @@ export default function CandidateProfile() {
               <Text style={styles.role}>
                 {[profile?.role, profile?.location].filter(Boolean).join(" · ") || "No details yet"}
               </Text>
+              {!isSelf && (
+                <Pressable style={styles.messageButton} onPress={onMessage} disabled={messaging}>
+                  <Feather name="message-circle" size={14} color="#fff" />
+                  <Text style={styles.messageButtonText}>{messaging ? "Opening…" : "Message"}</Text>
+                </Pressable>
+              )}
             </View>
 
             <View style={styles.statsCard}>
@@ -197,6 +222,21 @@ const styles = StyleSheet.create({
   role: {
     fontSize: 14,
     color: colors.textSecondary,
+    marginBottom: 14,
+  },
+  messageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.dark,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: radii.pill,
+  },
+  messageButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fff",
   },
   statsCard: {
     flexDirection: "row",
