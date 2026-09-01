@@ -9,16 +9,16 @@ import { AccountType } from "../constants/accountTypes";
 
 WebBrowser.maybeCompleteAuthSession();
 
-async function createSessionFromUrl(url: string) {
+async function parseSessionFromUrl(url: string) {
   const { params, errorCode } = QueryParams.getQueryParams(url);
   if (errorCode) throw new Error(errorCode);
 
-  const { access_token, refresh_token } = params;
+  const { access_token, refresh_token, type } = params;
   if (!access_token || !refresh_token) return null;
 
   const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
   if (error) throw error;
-  return data.session;
+  return { session: data.session, isRecovery: type === "recovery" };
 }
 
 export type Profile = {
@@ -49,6 +49,11 @@ type AuthContextValue = {
   refreshProfile: () => Promise<void>;
   startPhoneVerification: (phone: string) => Promise<void>;
   confirmPhoneVerification: (phone: string, token: string) => Promise<void>;
+  getAuthProviders: (email: string) => Promise<string[]>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  isPasswordRecovery: boolean;
+  completePasswordRecovery: (newPassword: string) => Promise<void>;
+  cancelPasswordRecovery: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -72,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -113,11 +119,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const sub = Linking.addEventListener("url", (event) => {
-      createSessionFromUrl(event.url).catch((e) =>
-        console.warn("Failed to create session from redirect URL:", e)
-      );
+    const handleUrl = (url: string) => {
+      parseSessionFromUrl(url)
+        .then((result) => {
+          if (result?.isRecovery) setIsPasswordRecovery(true);
+        })
+        .catch((e) => console.warn("Failed to create session from redirect URL:", e));
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl(url);
     });
+
+    const sub = Linking.addEventListener("url", (event) => handleUrl(event.url));
     return () => sub.remove();
   }, []);
 
@@ -152,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
     if (res.type === "success" && res.url) {
-      await createSessionFromUrl(res.url);
+      await parseSessionFromUrl(res.url);
     }
   };
 
@@ -177,6 +191,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await refreshProfile();
   };
 
+  const getAuthProviders = async (email: string) => {
+    const { data, error } = await supabase.rpc("get_auth_providers", { p_email: email });
+    if (error) throw error;
+    return (data ?? []) as string[];
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    const redirectTo = makeRedirectUri({ path: "reset-password" });
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+  };
+
+  const completePasswordRecovery = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    setIsPasswordRecovery(false);
+  };
+
+  const cancelPasswordRecovery = async () => {
+    setIsPasswordRecovery(false);
+    await signOut();
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -191,6 +228,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshProfile,
         startPhoneVerification,
         confirmPhoneVerification,
+        getAuthProviders,
+        requestPasswordReset,
+        isPasswordRecovery,
+        completePasswordRecovery,
+        cancelPasswordRecovery,
       }}
     >
       {children}

@@ -890,6 +890,23 @@ alter table public.applications
   add column if not exists answers jsonb not null default '[]'::jsonb;
 
 -- =====================================================================
+-- From auth-provider-lookup.sql
+-- =====================================================================
+
+create or replace function public.get_auth_providers(p_email text)
+returns text[]
+language sql
+security definer set search_path = public
+as $$
+  select coalesce(array_agg(distinct i.provider), '{}')
+  from auth.users u
+  join auth.identities i on i.user_id = u.id
+  where lower(u.email) = lower(p_email);
+$$;
+
+grant execute on function public.get_auth_providers(text) to anon, authenticated;
+
+-- =====================================================================
 -- From messaging.sql
 -- =====================================================================
 

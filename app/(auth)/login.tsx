@@ -8,7 +8,7 @@ import { useAuth } from "../../context/AuthContext";
 import { colors, radii } from "../../constants/theme";
 
 export default function Login() {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, getAuthProviders } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +21,16 @@ export default function Login() {
     try {
       await signIn(email.trim(), password);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
+      let message = e instanceof Error ? e.message : "Something went wrong. Try again.";
+      try {
+        const providers = await getAuthProviders(email.trim());
+        if (providers.includes("google") && !providers.includes("email")) {
+          message = "This account uses Google sign-in — tap \"Continue with Google\" below instead.";
+        }
+      } catch {
+        // Fall back to the generic message if the lookup itself fails.
+      }
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -76,6 +85,12 @@ export default function Login() {
           >
             <Text style={styles.submitText}>{submitting ? "Logging in…" : "Log in"}</Text>
           </Pressable>
+
+          <Link href="/(auth)/forgot-password" asChild>
+            <Pressable style={styles.forgotButton}>
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </Pressable>
+          </Link>
 
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
@@ -149,6 +164,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: "#fff",
+  },
+  forgotButton: {
+    alignItems: "center",
+    marginTop: 14,
+  },
+  forgotText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.accentDark,
   },
   dividerRow: {
     flexDirection: "row",
