@@ -5,9 +5,9 @@ import { router } from "expo-router";
 import FilterPills from "../../components/FilterPills";
 import AuthTextField from "../../components/AuthTextField";
 import SkillPill from "../../components/SkillPill";
+import Avatar from "../../components/Avatar";
 import { useCandidates } from "../../context/CandidatesContext";
 import { SKILL_CATEGORIES, SkillCategory } from "../../constants/scoring";
-import { getInitials } from "../../lib/initials";
 import { colors, radii } from "../../constants/theme";
 
 const CATEGORY_FILTERS = ["All", ...SKILL_CATEGORIES];
@@ -52,8 +52,8 @@ export default function Candidates() {
             style={styles.card}
             onPress={() => router.push(`/candidate/${c.id}`)}
           >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(c.full_name)}</Text>
+            <View style={styles.avatarWrap}>
+              <Avatar name={c.full_name} avatarUrl={c.avatar_url} size={48} />
             </View>
             <View style={styles.body}>
               <Text style={styles.name}>{c.full_name || "Circle member"}</Text>
@@ -104,19 +104,8 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.dark,
-    alignItems: "center",
-    justifyContent: "center",
+  avatarWrap: {
     marginRight: 14,
-  },
-  avatarText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
   },
   body: {
     flex: 1,

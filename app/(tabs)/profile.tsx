@@ -8,13 +8,13 @@ import ActivityHeatmap from "../../components/ActivityHeatmap";
 import SkillPill from "../../components/SkillPill";
 import ProjectItem from "../../components/ProjectItem";
 import ReliabilityCard, { FairnessSignals } from "../../components/ReliabilityCard";
+import Avatar from "../../components/Avatar";
 import { useAuth } from "../../context/AuthContext";
 import { useCredits } from "../../context/CreditsContext";
 import { useAffiliations } from "../../context/AffiliationsContext";
 import { useListings } from "../../context/ListingsContext";
 import { supabase } from "../../lib/supabase";
 import { SKILL_CATEGORIES, weightedPoints } from "../../constants/scoring";
-import { getInitials } from "../../lib/initials";
 import { formatShortDate } from "../../lib/formatDate";
 import { colors, radii } from "../../constants/theme";
 
@@ -82,9 +82,7 @@ export default function Profile() {
 
         <View style={styles.identity}>
           <View style={styles.avatarRing}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(profile?.full_name)}</Text>
-            </View>
+            <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
           </View>
           <Text style={styles.name}>{profile?.full_name || "Add your name"}</Text>
           <Text style={styles.role}>{roleLocation || "Add your role & location"}</Text>
@@ -297,19 +295,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
-  },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: colors.dark,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "700",
   },
   name: {
     fontSize: 22,

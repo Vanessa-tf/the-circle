@@ -47,6 +47,7 @@ type AuthContextValue = {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  uploadAvatar: (uri: string, contentType: string) => Promise<void>;
   startPhoneVerification: (phone: string) => Promise<void>;
   confirmPhoneVerification: (phone: string, token: string) => Promise<void>;
   getAuthProviders: (email: string) => Promise<string[]>;
@@ -180,6 +181,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(await fetchProfile(session.user.id));
   };
 
+  const uploadAvatar = async (uri: string, contentType: string) => {
+    if (!session) throw new Error("Not signed in");
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const ext = contentType.split("/")[1] ?? "jpg";
+    const path = `${session.user.id}/avatar-${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(path, blob, { contentType, upsert: true });
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: data.publicUrl })
+      .eq("id", session.user.id);
+    if (updateError) throw updateError;
+
+    await refreshProfile();
+  };
+
   const startPhoneVerification = async (phone: string) => {
     const { error } = await supabase.auth.updateUser({ phone });
     if (error) throw error;
@@ -226,6 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signOut,
         refreshProfile,
+        uploadAvatar,
         startPhoneVerification,
         confirmPhoneVerification,
         getAuthProviders,

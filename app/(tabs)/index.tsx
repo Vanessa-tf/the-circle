@@ -4,8 +4,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import OverviewSection from "../../components/OverviewSection";
 import JobSearchSection from "../../components/JobSearchSection";
+import Avatar from "../../components/Avatar";
 import { useAuth } from "../../context/AuthContext";
-import { getFirstName, getInitials } from "../../lib/initials";
+import { getFirstName } from "../../lib/initials";
 import { colors, radii } from "../../constants/theme";
 
 const today = new Date().toLocaleDateString("en-US", {
@@ -35,9 +36,7 @@ export default function Home() {
             <Text style={styles.date}>{today}</Text>
             <Text style={styles.greeting}>Welcome back, {getFirstName(profile?.full_name)}</Text>
           </View>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getInitials(profile?.full_name)}</Text>
-          </View>
+          <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={40} />
         </View>
 
         <View style={styles.tabSwitch}>
@@ -103,19 +102,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "700",
     color: colors.textPrimary,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.dark,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "700",
   },
   tabSwitch: {
     flexDirection: "row",

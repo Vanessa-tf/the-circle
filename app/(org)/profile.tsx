@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
+import Avatar from "../../components/Avatar";
 import { useAuth } from "../../context/AuthContext";
-import { getInitials } from "../../lib/initials";
 import { colors, radii } from "../../constants/theme";
 
 export default function OrgProfile() {
@@ -22,9 +22,7 @@ export default function OrgProfile() {
 
         <View style={styles.identity}>
           <View style={styles.avatarRing}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(profile?.full_name)}</Text>
-            </View>
+            <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
           </View>
           <Text style={styles.name}>{profile?.full_name || "Add your organization name"}</Text>
           <Text style={styles.role}>{profile?.account_type}</Text>
@@ -74,19 +72,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
-  },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: colors.dark,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "700",
   },
   name: {
     fontSize: 22,

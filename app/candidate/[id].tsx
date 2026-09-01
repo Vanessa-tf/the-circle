@@ -6,9 +6,9 @@ import { Feather } from "@expo/vector-icons";
 import SkillPill from "../../components/SkillPill";
 import ProjectItem from "../../components/ProjectItem";
 import ReliabilityCard, { FairnessSignals } from "../../components/ReliabilityCard";
+import Avatar from "../../components/Avatar";
 import { supabase } from "../../lib/supabase";
 import { SKILL_CATEGORIES, SkillCategory, weightedPoints } from "../../constants/scoring";
-import { getInitials } from "../../lib/initials";
 import { formatShortDate } from "../../lib/formatDate";
 import { colors, radii } from "../../constants/theme";
 
@@ -16,6 +16,7 @@ type CandidateProfile = {
   full_name: string | null;
   role: string | null;
   location: string | null;
+  avatar_url: string | null;
 };
 
 type CandidateCredit = {
@@ -41,7 +42,7 @@ export default function CandidateProfile() {
     if (!id) return;
 
     Promise.all([
-      supabase.from("profiles").select("full_name, role, location").eq("id", id).single(),
+      supabase.from("profiles").select("full_name, role, location, avatar_url").eq("id", id).single(),
       supabase
         .from("credits")
         .select("id, title, skill_category, points, verified_by, awarded_at, verifier_weight, consistency_factor")
@@ -86,8 +87,8 @@ export default function CandidateProfile() {
         ) : (
           <>
             <View style={styles.identity}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{getInitials(profile?.full_name)}</Text>
+              <View style={styles.avatarWrap}>
+                <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
               </View>
               <Text style={styles.name}>{profile?.full_name || "Circle member"}</Text>
               <Text style={styles.role}>
@@ -161,19 +162,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: colors.dark,
-    alignItems: "center",
-    justifyContent: "center",
+  avatarWrap: {
     marginBottom: 16,
-  },
-  avatarText: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "700",
   },
   name: {
     fontSize: 22,

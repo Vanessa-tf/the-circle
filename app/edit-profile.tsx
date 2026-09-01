@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Pl
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import AuthTextField from "../components/AuthTextField";
+import Avatar from "../components/Avatar";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { colors, radii } from "../constants/theme";
@@ -24,7 +26,8 @@ function draftKey(userId: string) {
 }
 
 export default function EditProfile() {
-  const { session, profile, refreshProfile, startPhoneVerification, confirmPhoneVerification } = useAuth();
+  const { session, profile, refreshProfile, uploadAvatar, startPhoneVerification, confirmPhoneVerification } =
+    useAuth();
 
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [role, setRole] = useState(profile?.role ?? "");
@@ -32,7 +35,36 @@ export default function EditProfile() {
   const [portfolioUrl, setPortfolioUrl] = useState(profile?.portfolio_url ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const draftLoaded = useRef(false);
+
+  const onPickAvatar = async () => {
+    setAvatarError(null);
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setAvatarError("Photo library access is needed to set a profile picture.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || result.assets.length === 0) return;
+
+    const asset = result.assets[0];
+    setAvatarUploading(true);
+    try {
+      await uploadAvatar(asset.uri, asset.mimeType ?? "image/jpeg");
+    } catch (e) {
+      setAvatarError(e instanceof Error ? e.message : "Couldn't upload that photo. Try again.");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -127,6 +159,21 @@ export default function EditProfile() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.avatarSection}>
+            <Pressable onPress={onPickAvatar} disabled={avatarUploading}>
+              <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
+              <View style={styles.avatarEditBadge}>
+                <Feather name="camera" size={14} color="#fff" />
+              </View>
+            </Pressable>
+            <Pressable onPress={onPickAvatar} disabled={avatarUploading}>
+              <Text style={styles.avatarChangeText}>
+                {avatarUploading ? "Uploading…" : "Change photo"}
+              </Text>
+            </Pressable>
+            {avatarError && <Text style={styles.error}>{avatarError}</Text>}
+          </View>
+
           <AuthTextField
             label="Full name"
             value={fullName}
@@ -253,6 +300,29 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 32,
+  },
+  avatarSection: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  avatarEditBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.accentDark,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  avatarChangeText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.accentDark,
+    marginTop: 10,
   },
   error: {
     fontSize: 13,
