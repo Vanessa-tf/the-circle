@@ -339,6 +339,7 @@ const styles = StyleSheet.create({
   avatarSection: {
     alignItems: "center",
     marginBottom: 24,
+    marginTop: -44,
   },
   avatarEditBadge: {
     position: "absolute",

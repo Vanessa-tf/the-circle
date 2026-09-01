@@ -18,22 +18,24 @@ export default function OrgProfile() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Pressable style={styles.banner} onPress={bannerPicker.pick} disabled={bannerPicker.uploading}>
-          {profile?.banner_url ? (
-            <Image source={{ uri: profile.banner_url }} style={styles.bannerImage} />
-          ) : (
-            <View style={styles.bannerPlaceholder} />
-          )}
-          <View style={styles.bannerEditBadge}>
-            <Feather name="camera" size={13} color="#fff" />
-          </View>
-        </Pressable>
-
-        <View style={styles.headerRow}>
-          <View />
-          <Pressable style={styles.roundButton} onPress={() => signOut()}>
-            <Feather name="log-out" size={18} color={colors.textPrimary} />
+        <View style={styles.bannerWrap}>
+          <Pressable style={styles.banner} onPress={bannerPicker.pick} disabled={bannerPicker.uploading}>
+            {profile?.banner_url ? (
+              <Image source={{ uri: profile.banner_url }} style={styles.bannerImage} />
+            ) : (
+              <View style={styles.bannerPlaceholder} />
+            )}
+            <View style={styles.bannerEditBadge}>
+              <Feather name="camera" size={13} color="#fff" />
+            </View>
           </Pressable>
+
+          <View style={styles.headerRowOverlay}>
+            <View />
+            <Pressable style={styles.roundButton} onPress={() => signOut()}>
+              <Feather name="log-out" size={18} color={colors.textPrimary} />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.identity}>
@@ -73,6 +75,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 32,
   },
+  bannerWrap: {
+    position: "relative",
+    marginTop: 8,
+  },
   banner: {
     width: "100%",
     aspectRatio: 3,
@@ -100,11 +106,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerRow: {
+  headerRowOverlay: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    right: 10,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
-    marginBottom: 12,
   },
   roundButton: {
     width: 40,
@@ -117,6 +125,7 @@ const styles = StyleSheet.create({
   identity: {
     alignItems: "center",
     marginBottom: 20,
+    marginTop: -52,
   },
   avatarRing: {
     width: 104,
@@ -124,6 +133,7 @@ const styles = StyleSheet.create({
     borderRadius: 52,
     borderWidth: 3,
     borderColor: colors.accent,
+    backgroundColor: colors.background,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
