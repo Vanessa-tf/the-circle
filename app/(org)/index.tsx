@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { Feather } from "@expo/vector-icons";
 import StatCard from "../../components/StatCard";
 import { useAuth } from "../../context/AuthContext";
 import { useTasks } from "../../context/TasksContext";
@@ -19,7 +20,12 @@ export default function OrgDashboard() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.eyebrow}>THE CIRCLE</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.eyebrow}>THE CIRCLE</Text>
+          <Pressable style={styles.roundButton} onPress={() => router.push("/search")}>
+            <Feather name="search" size={18} color={colors.textPrimary} />
+          </Pressable>
+        </View>
         <Text style={styles.title}>{profile?.full_name || "Your organization"}</Text>
         <Text style={styles.subtitle}>
           {isInstitution
@@ -80,13 +86,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 32,
   },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 12,
+  },
   eyebrow: {
     fontSize: 12,
     fontWeight: "700",
     color: colors.accentDark,
     letterSpacing: 1,
-    marginTop: 8,
-    marginBottom: 12,
+  },
+  roundButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
     fontSize: 26,

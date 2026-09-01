@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 import OverviewSection from "../../components/OverviewSection";
 import JobSearchSection from "../../components/JobSearchSection";
 import Avatar from "../../components/Avatar";
@@ -26,8 +27,8 @@ export default function Home() {
           <Pressable style={styles.roundButton}>
             <Feather name="chevron-left" size={20} color={colors.textPrimary} />
           </Pressable>
-          <Pressable style={styles.roundButton}>
-            <Feather name="more-horizontal" size={20} color={colors.textPrimary} />
+          <Pressable style={styles.roundButton} onPress={() => router.push("/search")}>
+            <Feather name="search" size={18} color={colors.textPrimary} />
           </Pressable>
         </View>
 
