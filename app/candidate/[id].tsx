@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, Image, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -7,6 +7,7 @@ import SkillPill from "../../components/SkillPill";
 import ProjectItem from "../../components/ProjectItem";
 import ReliabilityCard, { FairnessSignals } from "../../components/ReliabilityCard";
 import Avatar from "../../components/Avatar";
+import AvatarViewerModal from "../../components/AvatarViewerModal";
 import { supabase } from "../../lib/supabase";
 import { SKILL_CATEGORIES, SkillCategory, weightedPoints } from "../../constants/scoring";
 import { formatShortDate } from "../../lib/formatDate";
@@ -17,6 +18,7 @@ type CandidateProfile = {
   role: string | null;
   location: string | null;
   avatar_url: string | null;
+  banner_url: string | null;
 };
 
 type CandidateCredit = {
@@ -42,7 +44,11 @@ export default function CandidateProfile() {
     if (!id) return;
 
     Promise.all([
-      supabase.from("profiles").select("full_name, role, location, avatar_url").eq("id", id).single(),
+      supabase
+        .from("profiles")
+        .select("full_name, role, location, avatar_url, banner_url")
+        .eq("id", id)
+        .single(),
       supabase
         .from("credits")
         .select("id, title, skill_category, points, verified_by, awarded_at, verifier_weight, consistency_factor")
@@ -72,10 +78,15 @@ export default function CandidateProfile() {
   }, {} as Record<SkillCategory, number>);
 
   const totalScore = Object.values(skillTotals).reduce((sum, v) => sum + v, 0);
+  const [avatarViewerVisible, setAvatarViewerVisible] = useState(false);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {profile?.banner_url && (
+          <Image source={{ uri: profile.banner_url }} style={styles.banner} />
+        )}
+
         <View style={styles.headerRow}>
           <Pressable style={styles.roundButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={colors.textPrimary} />
@@ -87,9 +98,9 @@ export default function CandidateProfile() {
         ) : (
           <>
             <View style={styles.identity}>
-              <View style={styles.avatarWrap}>
+              <Pressable style={styles.avatarWrap} onPress={() => setAvatarViewerVisible(true)}>
                 <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
-              </View>
+              </Pressable>
               <Text style={styles.name}>{profile?.full_name || "Circle member"}</Text>
               <Text style={styles.role}>
                 {[profile?.role, profile?.location].filter(Boolean).join(" · ") || "No details yet"}
@@ -132,6 +143,13 @@ export default function CandidateProfile() {
           </>
         )}
       </ScrollView>
+
+      <AvatarViewerModal
+        visible={avatarViewerVisible}
+        name={profile?.full_name}
+        avatarUrl={profile?.avatar_url}
+        onClose={() => setAvatarViewerVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -144,6 +162,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 32,
+  },
+  banner: {
+    width: "100%",
+    aspectRatio: 3,
+    borderRadius: radii.md,
   },
   headerRow: {
     flexDirection: "row",

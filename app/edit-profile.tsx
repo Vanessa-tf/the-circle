@@ -1,12 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import AuthTextField from "../components/AuthTextField";
 import Avatar from "../components/Avatar";
+import AvatarViewerModal from "../components/AvatarViewerModal";
+import { useProfileImagePicker } from "../hooks/useProfileImagePicker";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { colors, radii } from "../constants/theme";
@@ -26,8 +36,7 @@ function draftKey(userId: string) {
 }
 
 export default function EditProfile() {
-  const { session, profile, refreshProfile, uploadAvatar, startPhoneVerification, confirmPhoneVerification } =
-    useAuth();
+  const { session, profile, refreshProfile, startPhoneVerification, confirmPhoneVerification } = useAuth();
 
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [role, setRole] = useState(profile?.role ?? "");
@@ -35,36 +44,10 @@ export default function EditProfile() {
   const [portfolioUrl, setPortfolioUrl] = useState(profile?.portfolio_url ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [avatarUploading, setAvatarUploading] = useState(false);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarViewerVisible, setAvatarViewerVisible] = useState(false);
   const draftLoaded = useRef(false);
-
-  const onPickAvatar = async () => {
-    setAvatarError(null);
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setAvatarError("Photo library access is needed to set a profile picture.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (result.canceled || result.assets.length === 0) return;
-
-    const asset = result.assets[0];
-    setAvatarUploading(true);
-    try {
-      await uploadAvatar(asset.uri, asset.mimeType ?? "image/jpeg");
-    } catch (e) {
-      setAvatarError(e instanceof Error ? e.message : "Couldn't upload that photo. Try again.");
-    } finally {
-      setAvatarUploading(false);
-    }
-  };
+  const avatarPicker = useProfileImagePicker("avatar");
+  const bannerPicker = useProfileImagePicker("banner");
 
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -159,19 +142,31 @@ export default function EditProfile() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <Pressable style={styles.banner} onPress={bannerPicker.pick} disabled={bannerPicker.uploading}>
+            {profile?.banner_url ? (
+              <Image source={{ uri: profile.banner_url }} style={styles.bannerImage} />
+            ) : (
+              <View style={styles.bannerPlaceholder} />
+            )}
+            <View style={styles.bannerEditBadge}>
+              <Feather name="camera" size={13} color="#fff" />
+            </View>
+          </Pressable>
+
           <View style={styles.avatarSection}>
-            <Pressable onPress={onPickAvatar} disabled={avatarUploading}>
+            <Pressable onPress={() => setAvatarViewerVisible(true)}>
               <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
               <View style={styles.avatarEditBadge}>
                 <Feather name="camera" size={14} color="#fff" />
               </View>
             </Pressable>
-            <Pressable onPress={onPickAvatar} disabled={avatarUploading}>
+            <Pressable onPress={avatarPicker.pick} disabled={avatarPicker.uploading}>
               <Text style={styles.avatarChangeText}>
-                {avatarUploading ? "Uploading…" : "Change photo"}
+                {avatarPicker.uploading ? "Uploading…" : "Change photo"}
               </Text>
             </Pressable>
-            {avatarError && <Text style={styles.error}>{avatarError}</Text>}
+            {avatarPicker.error && <Text style={styles.error}>{avatarPicker.error}</Text>}
+            {bannerPicker.error && <Text style={styles.error}>{bannerPicker.error}</Text>}
           </View>
 
           <AuthTextField
@@ -264,6 +259,18 @@ export default function EditProfile() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <AvatarViewerModal
+        visible={avatarViewerVisible}
+        name={profile?.full_name}
+        avatarUrl={profile?.avatar_url}
+        editable
+        uploading={avatarPicker.uploading}
+        onClose={() => setAvatarViewerVisible(false)}
+        onEdit={avatarPicker.pick}
+      />
+      {avatarPicker.cropModal}
+      {bannerPicker.cropModal}
     </SafeAreaView>
   );
 }
@@ -300,6 +307,34 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 32,
+  },
+  banner: {
+    width: "100%",
+    aspectRatio: 3,
+    borderRadius: radii.md,
+    overflow: "hidden",
+    backgroundColor: colors.card,
+    marginBottom: 16,
+  },
+  bannerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  bannerPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: colors.iconBgGray,
+  },
+  bannerEditBadge: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarSection: {
     alignItems: "center",

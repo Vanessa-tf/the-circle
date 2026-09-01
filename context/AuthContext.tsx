@@ -27,10 +27,13 @@ export type Profile = {
   role: string | null;
   location: string | null;
   avatar_url: string | null;
+  banner_url: string | null;
   portfolio_url: string | null;
   account_type: AccountType;
   phone_verified: boolean;
 };
+
+export type ProfileImageKind = "avatar" | "banner";
 
 type AuthContextValue = {
   session: Session | null;
@@ -47,7 +50,7 @@ type AuthContextValue = {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  uploadAvatar: (uri: string, contentType: string) => Promise<void>;
+  uploadProfileImage: (kind: ProfileImageKind, uri: string, contentType: string) => Promise<void>;
   startPhoneVerification: (phone: string) => Promise<void>;
   confirmPhoneVerification: (phone: string, token: string) => Promise<void>;
   getAuthProviders: (email: string) => Promise<string[]>;
@@ -62,7 +65,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role, location, avatar_url, portfolio_url, account_type, phone_verified")
+    .select(
+      "id, full_name, role, location, avatar_url, banner_url, portfolio_url, account_type, phone_verified"
+    )
     .eq("id", userId)
     .single();
 
@@ -181,13 +186,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(await fetchProfile(session.user.id));
   };
 
-  const uploadAvatar = async (uri: string, contentType: string) => {
+  const uploadProfileImage = async (kind: ProfileImageKind, uri: string, contentType: string) => {
     if (!session) throw new Error("Not signed in");
 
     const response = await fetch(uri);
     const blob = await response.blob();
     const ext = contentType.split("/")[1] ?? "jpg";
-    const path = `${session.user.id}/avatar-${Date.now()}.${ext}`;
+    const path = `${session.user.id}/${kind}-${Date.now()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from("avatars")
@@ -195,10 +200,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (uploadError) throw uploadError;
 
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    const column = kind === "avatar" ? "avatar_url" : "banner_url";
 
     const { error: updateError } = await supabase
       .from("profiles")
-      .update({ avatar_url: data.publicUrl })
+      .update({ [column]: data.publicUrl })
       .eq("id", session.user.id);
     if (updateError) throw updateError;
 
@@ -251,7 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signOut,
         refreshProfile,
-        uploadAvatar,
+        uploadProfileImage,
         startPhoneVerification,
         confirmPhoneVerification,
         getAuthProviders,

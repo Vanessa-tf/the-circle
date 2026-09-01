@@ -1,18 +1,34 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Image, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import Avatar from "../../components/Avatar";
+import AvatarViewerModal from "../../components/AvatarViewerModal";
+import { useProfileImagePicker } from "../../hooks/useProfileImagePicker";
 import { useAuth } from "../../context/AuthContext";
 import { colors, radii } from "../../constants/theme";
 
 export default function OrgProfile() {
   const { profile, signOut } = useAuth();
+  const [avatarViewerVisible, setAvatarViewerVisible] = useState(false);
+  const avatarPicker = useProfileImagePicker("avatar");
+  const bannerPicker = useProfileImagePicker("banner");
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Pressable style={styles.banner} onPress={bannerPicker.pick} disabled={bannerPicker.uploading}>
+          {profile?.banner_url ? (
+            <Image source={{ uri: profile.banner_url }} style={styles.bannerImage} />
+          ) : (
+            <View style={styles.bannerPlaceholder} />
+          )}
+          <View style={styles.bannerEditBadge}>
+            <Feather name="camera" size={13} color="#fff" />
+          </View>
+        </Pressable>
+
         <View style={styles.headerRow}>
           <View />
           <Pressable style={styles.roundButton} onPress={() => signOut()}>
@@ -21,9 +37,9 @@ export default function OrgProfile() {
         </View>
 
         <View style={styles.identity}>
-          <View style={styles.avatarRing}>
+          <Pressable style={styles.avatarRing} onPress={() => setAvatarViewerVisible(true)}>
             <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
-          </View>
+          </Pressable>
           <Text style={styles.name}>{profile?.full_name || "Add your organization name"}</Text>
           <Text style={styles.role}>{profile?.account_type}</Text>
 
@@ -32,6 +48,18 @@ export default function OrgProfile() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <AvatarViewerModal
+        visible={avatarViewerVisible}
+        name={profile?.full_name}
+        avatarUrl={profile?.avatar_url}
+        editable
+        uploading={avatarPicker.uploading}
+        onClose={() => setAvatarViewerVisible(false)}
+        onEdit={avatarPicker.pick}
+      />
+      {avatarPicker.cropModal}
+      {bannerPicker.cropModal}
     </SafeAreaView>
   );
 }
@@ -44,6 +72,33 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 32,
+  },
+  banner: {
+    width: "100%",
+    aspectRatio: 3,
+    borderRadius: radii.md,
+    overflow: "hidden",
+    backgroundColor: colors.card,
+  },
+  bannerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  bannerPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: colors.iconBgGray,
+  },
+  bannerEditBadge: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerRow: {
     flexDirection: "row",
