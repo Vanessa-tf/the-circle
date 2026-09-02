@@ -14,6 +14,7 @@ export default function OrgProfile() {
   const [avatarViewerVisible, setAvatarViewerVisible] = useState(false);
   const avatarPicker = useProfileImagePicker("avatar");
   const bannerPicker = useProfileImagePicker("banner");
+  const industryLocation = [profile?.role, profile?.location].filter(Boolean).join(" · ");
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -43,7 +44,7 @@ export default function OrgProfile() {
             <Avatar name={profile?.full_name} avatarUrl={profile?.avatar_url} size={88} />
           </Pressable>
           <Text style={styles.name}>{profile?.full_name || "Add your organization name"}</Text>
-          <Text style={styles.role}>{profile?.account_type}</Text>
+          <Text style={styles.role}>{industryLocation || profile?.account_type}</Text>
 
           <Pressable style={styles.editButton} onPress={() => router.push("/edit-profile")}>
             <Text style={styles.editButtonText}>Edit profile</Text>

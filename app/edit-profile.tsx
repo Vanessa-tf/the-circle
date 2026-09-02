@@ -37,6 +37,7 @@ function draftKey(userId: string) {
 
 export default function EditProfile() {
   const { session, profile, refreshProfile, startPhoneVerification, confirmPhoneVerification } = useAuth();
+  const isOrg = profile?.account_type === "Company" || profile?.account_type === "Institution";
 
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [role, setRole] = useState(profile?.role ?? "");
@@ -131,7 +132,7 @@ export default function EditProfile() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>Edit profile</Text>
+        <Text style={styles.headerTitle}>{isOrg ? "Edit organization" : "Edit profile"}</Text>
         <Pressable style={styles.closeButton} onPress={closeScreen}>
           <Feather name="x" size={20} color={colors.textPrimary} />
         </Pressable>
@@ -170,18 +171,18 @@ export default function EditProfile() {
           </View>
 
           <AuthTextField
-            label="Full name"
+            label={isOrg ? "Organization name" : "Full name"}
             value={fullName}
             onChangeText={setFullName}
             autoCapitalize="words"
-            placeholder="Jane Doe"
+            placeholder={isOrg ? "e.g. Novatech Inc" : "Jane Doe"}
           />
           <AuthTextField
-            label="Role"
+            label={isOrg ? "Industry" : "Role"}
             value={role}
             onChangeText={setRole}
             autoCapitalize="words"
-            placeholder="e.g. Product Designer"
+            placeholder={isOrg ? "e.g. Fintech, Retail, Software" : "e.g. Product Designer"}
           />
           <AuthTextField
             label="Location"
@@ -191,11 +192,11 @@ export default function EditProfile() {
             placeholder="e.g. Nairobi"
           />
           <AuthTextField
-            label="Portfolio link"
+            label={isOrg ? "Website" : "Portfolio link"}
             value={portfolioUrl}
             onChangeText={setPortfolioUrl}
             keyboardType="url"
-            placeholder="https://your-portfolio.com"
+            placeholder={isOrg ? "https://yourcompany.com" : "https://your-portfolio.com"}
           />
 
           <Text style={styles.sectionLabel}>Phone number</Text>

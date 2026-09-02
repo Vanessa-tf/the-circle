@@ -112,7 +112,7 @@ export default function OrgProfileView() {
               </View>
               <Text style={styles.name}>{profile?.full_name || "Unnamed organization"}</Text>
               <Text style={styles.role}>
-                {[profile?.account_type, profile?.location].filter(Boolean).join(" · ")}
+                {[profile?.role || profile?.account_type, profile?.location].filter(Boolean).join(" · ")}
               </Text>
               {!isSelf && (
                 <Pressable style={styles.messageButton} onPress={onMessage} disabled={messaging}>

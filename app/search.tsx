@@ -100,7 +100,7 @@ export default function Search() {
         subtitle:
           p.account_type === "Individual"
             ? [p.role, p.location].filter(Boolean).join(" · ") || "No details yet"
-            : [p.account_type, p.location].filter(Boolean).join(" · "),
+            : [p.role || p.account_type, p.location].filter(Boolean).join(" · "),
         avatarUrl: p.avatar_url,
       }));
 
