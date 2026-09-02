@@ -57,6 +57,7 @@ function RootLayoutNav() {
                     <Stack.Screen name="conversation" />
                     <Stack.Screen name="search" />
                     <Stack.Screen name="org/[id]" />
+                    <Stack.Screen name="directory/[id]" />
                     <Stack.Screen name="startup/[id]" />
                     <Stack.Screen name="apply-listing" options={{ presentation: "modal" }} />
                   </Stack.Protected>

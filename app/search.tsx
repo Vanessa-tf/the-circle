@@ -16,7 +16,7 @@ const LISTING_CATEGORIES = ["Jobs", "Freelance", "Investors", "Startups", "Mento
 
 type SearchResult = {
   id: string;
-  kind: "person" | "org" | string;
+  kind: "person" | "org" | "directory" | string;
   title: string;
   subtitle: string;
   avatarUrl: string | null;
@@ -77,7 +77,21 @@ export default function Search() {
         queries.push(Promise.resolve({ data: [], error: null }));
       }
 
-      const [profilesRes, listingsRes] = await Promise.all(queries);
+      const wantsDirectory = filter === "All" || filter === "Companies";
+      if (wantsDirectory) {
+        queries.push(
+          supabase
+            .from("company_directory")
+            .select("id, name, industry, location, claimed_by")
+            .is("claimed_by", null)
+            .or(`name.ilike.%${q}%,industry.ilike.%${q}%`)
+            .limit(20)
+        );
+      } else {
+        queries.push(Promise.resolve({ data: [], error: null }));
+      }
+
+      const [profilesRes, listingsRes, directoryRes] = await Promise.all(queries);
 
       const people: SearchResult[] = (profilesRes.data ?? []).map((p) => ({
         id: p.id,
@@ -98,7 +112,15 @@ export default function Search() {
         avatarUrl: null,
       }));
 
-      setResults([...people, ...listings]);
+      const directory: SearchResult[] = (directoryRes.data ?? []).map((d) => ({
+        id: d.id,
+        kind: "directory",
+        title: d.name,
+        subtitle: `${d.industry} · ${d.location} · Unclaimed`,
+        avatarUrl: null,
+      }));
+
+      setResults([...people, ...listings, ...directory]);
       setLoading(false);
     }, 300);
 
@@ -110,6 +132,8 @@ export default function Search() {
       router.push(`/candidate/${result.id}`);
     } else if (result.kind === "org") {
       router.push(`/org/${result.id}`);
+    } else if (result.kind === "directory") {
+      router.push(`/directory/${result.id}`);
     } else if (result.kind === "Startups") {
       router.push(`/startup/${result.id}`);
     } else {
@@ -136,6 +160,8 @@ export default function Search() {
         return "user";
       case "org":
         return "briefcase";
+      case "directory":
+        return "globe";
       case "Startups":
         return "trending-up";
       case "Mentors":
