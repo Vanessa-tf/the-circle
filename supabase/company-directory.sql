@@ -61,5 +61,7 @@ insert into public.company_directory (name, industry, location, website, descrip
   ('Absa Group', 'Banking & Financial Services', 'Johannesburg', 'https://absa.africa', 'Pan-African financial services group.'),
   ('Nedbank Group', 'Banking & Financial Services', 'Johannesburg', 'https://nedbank.co.za', 'One of South Africa''s four largest banking groups.'),
   ('MultiChoice Group', 'Media & Broadcasting', 'Johannesburg', 'https://multichoice.com', 'Pay-television and video entertainment group, parent of DStv.'),
-  ('Bidvest Group', 'Diversified Services', 'Johannesburg', 'https://bidvest.co.za', 'Diversified services, trading, and distribution group.')
+  ('Bidvest Group', 'Diversified Services', 'Johannesburg', 'https://bidvest.co.za', 'Diversified services, trading, and distribution group.'),
+  ('Cell C', 'Telecommunications', 'Johannesburg', 'https://cellc.co.za', 'South African mobile network operator.'),
+  ('Deloitte South Africa', 'Professional Services', 'Johannesburg', 'https://deloitte.com/za', 'South African arm of the global professional services and consulting firm.')
 on conflict (name) do nothing;
