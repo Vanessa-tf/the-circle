@@ -12,6 +12,110 @@ const SMTP_USER = Deno.env.get("SMTP_USER");
 const SMTP_PASS = Deno.env.get("SMTP_PASS");
 const SMTP_FROM = Deno.env.get("SMTP_FROM") ?? "The Circle <noreply@thecircle.local>";
 
+// The app's real brand colors (constants/theme.ts), kept in sync by hand
+// since this function can't import from the app bundle.
+const COLORS = {
+  dark: "#12182B",
+  accent: "#2FD3C8",
+  accentDark: "#1AA89E",
+  background: "#EEF1F4",
+  card: "#FFFFFF",
+  textSecondary: "#6B7686",
+  textMuted: "#9AA3B2",
+  border: "#E4E8EE",
+};
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildVerificationEmailHtml(params: {
+  claimantName: string;
+  title: string;
+  skillCategory: string;
+  points: number;
+  org: string;
+  verifyUrl: string;
+}): string {
+  const { claimantName, title, skillCategory, points, org, verifyUrl } = params;
+  const name = escapeHtml(claimantName);
+  const claimTitle = escapeHtml(title);
+  const category = escapeHtml(skillCategory);
+  const orgName = escapeHtml(org);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <body style="margin:0; padding:0; background-color:${COLORS.background}; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${COLORS.background}; padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%; background-color:${COLORS.card}; border-radius:16px; overflow:hidden;">
+            <tr>
+              <td style="background-color:${COLORS.dark}; padding:28px 32px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:${COLORS.accent}; text-transform:uppercase;">
+                      THE CIRCLE
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding-top:6px; font-size:15px; font-weight:600; color:#ffffff;">
+                      Work verification request
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0 0 16px; font-size:15px; line-height:22px; color:${COLORS.dark};">
+                  Hi,
+                </p>
+                <p style="margin:0 0 20px; font-size:15px; line-height:22px; color:${COLORS.dark};">
+                  <strong>${name}</strong> says they completed the following work and listed you as their verifier:
+                </p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${COLORS.background}; border-radius:12px; margin-bottom:24px;">
+                  <tr>
+                    <td style="padding:18px 20px;">
+                      <div style="font-size:15px; font-weight:700; color:${COLORS.dark}; margin-bottom:6px;">${claimTitle}</div>
+                      <div style="font-size:13px; color:${COLORS.textSecondary};">${category} · ${points} pts · ${orgName}</div>
+                    </td>
+                  </tr>
+                </table>
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                  <tr>
+                    <td style="border-radius:999px; background-color:${COLORS.accentDark};">
+                      <a href="${verifyUrl}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:700; color:#ffffff; text-decoration:none; border-radius:999px;">
+                        Review and confirm
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0; font-size:12px; line-height:18px; color:${COLORS.textMuted};">
+                  If the button doesn't work, copy this link into your browser:<br />
+                  <a href="${verifyUrl}" style="color:${COLORS.accentDark};">${verifyUrl}</a>
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px; border-top:1px solid ${COLORS.border};">
+                <p style="margin:0; font-size:12px; line-height:18px; color:${COLORS.textMuted};">
+                  This is an automated message from The Circle. If you don't recognize this request, you can safely ignore this email — no action will be taken without your confirmation.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 export default {
   fetch: withSupabase({ auth: "user" }, async (req, ctx) => {
     if (!SMTP_HOST) {
@@ -76,6 +180,14 @@ export default {
           `${claim.points} pts) at ${claim.org}, and listed you as their verifier.\n\n` +
           `Confirm or deny this here:\n${verifyUrl}\n\n` +
           `If you don't recognize this, you can safely ignore this email.`,
+        html: buildVerificationEmailHtml({
+          claimantName,
+          title: claim.title,
+          skillCategory: claim.skill_category,
+          points: claim.points,
+          org: claim.org,
+          verifyUrl,
+        }),
       });
     } catch (e) {
       console.error("Failed to send verification email:", e);
