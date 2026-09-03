@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from "react-n
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import ConfirmDialog from "../../../components/ConfirmDialog";
 import { useTasks } from "../../../context/TasksContext";
 import { colors, radii } from "../../../constants/theme";
 
@@ -16,8 +17,10 @@ function goBack() {
 
 export default function TaskReview() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { myTasks, incomingSubmissions, resolveSubmission, closeTask } = useTasks();
+  const { myTasks, incomingSubmissions, resolveSubmission, undoSubmissionResolution, closeTask } =
+    useTasks();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [confirmRejectId, setConfirmRejectId] = useState<string | null>(null);
 
   const task = myTasks.find((t) => t.id === id);
   const submissions = incomingSubmissions.filter((s) => s.task_id === id);
@@ -26,6 +29,16 @@ export default function TaskReview() {
     setResolvingId(submissionId);
     try {
       await resolveSubmission(submissionId, approve);
+    } finally {
+      setResolvingId(null);
+      setConfirmRejectId(null);
+    }
+  };
+
+  const onUndo = async (submissionId: string) => {
+    setResolvingId(submissionId);
+    try {
+      await undoSubmissionResolution(submissionId);
     } finally {
       setResolvingId(null);
     }
@@ -74,23 +87,43 @@ export default function TaskReview() {
                 <Pressable
                   style={[styles.rejectButton, resolvingId === s.id && styles.buttonDisabled]}
                   disabled={resolvingId === s.id}
-                  onPress={() => onResolve(s.id, false)}
+                  onPress={() => setConfirmRejectId(s.id)}
                 >
                   <Text style={styles.rejectText}>Reject</Text>
                 </Pressable>
               </View>
             ) : (
-              <View style={[styles.statusPill, s.status === "rejected" && styles.statusPillRejected]}>
-                <Text
-                  style={[styles.statusText, s.status === "rejected" && styles.statusTextRejected]}
+              <View style={styles.resolvedRow}>
+                <View style={[styles.statusPill, s.status === "rejected" && styles.statusPillRejected]}>
+                  <Text
+                    style={[styles.statusText, s.status === "rejected" && styles.statusTextRejected]}
+                  >
+                    {s.status === "approved" ? "Approved" : "Rejected"}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => onUndo(s.id)}
+                  disabled={resolvingId === s.id}
+                  hitSlop={8}
                 >
-                  {s.status === "approved" ? "Approved" : "Rejected"}
-                </Text>
+                  <Text style={styles.undoText}>{resolvingId === s.id ? "Undoing…" : "Undo"}</Text>
+                </Pressable>
               </View>
             )}
           </View>
         ))}
       </ScrollView>
+
+      <ConfirmDialog
+        visible={!!confirmRejectId}
+        title="Reject this submission?"
+        message="They'll be notified their work wasn't approved. You can undo this afterward if needed."
+        confirmLabel="Reject"
+        destructive
+        busy={resolvingId === confirmRejectId}
+        onConfirm={() => confirmRejectId && onResolve(confirmRejectId, false)}
+        onCancel={() => setConfirmRejectId(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -201,6 +234,11 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.5,
   },
+  resolvedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   statusPill: {
     alignSelf: "flex-start",
     backgroundColor: colors.iconBgGreen,
@@ -218,5 +256,10 @@ const styles = StyleSheet.create({
   },
   statusTextRejected: {
     color: colors.textMuted,
+  },
+  undoText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.accentDark,
   },
 });

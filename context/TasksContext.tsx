@@ -50,6 +50,7 @@ type TasksContextValue = {
   closeTask: (taskId: string) => Promise<void>;
   submitWork: (taskId: string, evidence: string) => Promise<void>;
   resolveSubmission: (submissionId: string, approve: boolean) => Promise<void>;
+  undoSubmissionResolution: (submissionId: string) => Promise<void>;
 };
 
 const TasksContext = createContext<TasksContextValue | undefined>(undefined);
@@ -227,6 +228,17 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     [fetchAll]
   );
 
+  const undoSubmissionResolution = useCallback(
+    async (submissionId: string) => {
+      const { error } = await supabase.rpc("undo_task_submission_resolution", {
+        p_submission_id: submissionId,
+      });
+      if (error) throw error;
+      await fetchAll();
+    },
+    [fetchAll]
+  );
+
   return (
     <TasksContext.Provider
       value={{
@@ -240,6 +252,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         closeTask,
         submitWork,
         resolveSubmission,
+        undoSubmissionResolution,
       }}
     >
       {children}

@@ -2,20 +2,33 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import { useAffiliations } from "../../context/AffiliationsContext";
 import { colors, radii } from "../../constants/theme";
 
 export default function Members() {
-  const { incomingAffiliations, resolveAffiliation } = useAffiliations();
+  const { incomingAffiliations, resolveAffiliation, undoAffiliationResolution } = useAffiliations();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [confirmRejectId, setConfirmRejectId] = useState<string | null>(null);
 
   const pending = incomingAffiliations.filter((a) => a.status === "pending");
   const roster = incomingAffiliations.filter((a) => a.status === "approved");
+  const rejected = incomingAffiliations.filter((a) => a.status === "rejected");
 
   const onResolve = async (id: string, approve: boolean) => {
     setResolvingId(id);
     try {
       await resolveAffiliation(id, approve);
+    } finally {
+      setResolvingId(null);
+      setConfirmRejectId(null);
+    }
+  };
+
+  const onUndo = async (id: string) => {
+    setResolvingId(id);
+    try {
+      await undoAffiliationResolution(id);
     } finally {
       setResolvingId(null);
     }
@@ -44,9 +57,28 @@ export default function Members() {
                   <Pressable
                     style={[styles.rejectButton, resolvingId === a.id && styles.buttonDisabled]}
                     disabled={resolvingId === a.id}
-                    onPress={() => onResolve(a.id, false)}
+                    onPress={() => setConfirmRejectId(a.id)}
                   >
                     <Text style={styles.rejectText}>Reject</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </>
+        )}
+
+        {rejected.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Declined</Text>
+            {rejected.map((a) => (
+              <View key={a.id} style={styles.card}>
+                <Text style={styles.name}>{a.individual_name ?? "Someone"}</Text>
+                <View style={styles.resolvedRow}>
+                  <View style={[styles.statusPill, styles.statusPillRejected]}>
+                    <Text style={[styles.statusText, styles.statusTextRejected]}>Rejected</Text>
+                  </View>
+                  <Pressable onPress={() => onUndo(a.id)} disabled={resolvingId === a.id} hitSlop={8}>
+                    <Text style={styles.undoText}>{resolvingId === a.id ? "Undoing…" : "Undo"}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -57,16 +89,33 @@ export default function Members() {
         <Text style={styles.sectionTitle}>Roster</Text>
         {roster.length === 0 && <Text style={styles.emptyText}>No members yet.</Text>}
         {roster.map((a) => (
-          <Pressable
-            key={a.id}
-            style={styles.card}
-            onPress={() => router.push(`/candidate/${a.individual_id}`)}
-          >
-            <Text style={styles.name}>{a.individual_name ?? "Someone"}</Text>
-            <Text style={styles.meta}>View profile</Text>
-          </Pressable>
+          <View key={a.id} style={styles.card}>
+            <Pressable onPress={() => router.push(`/candidate/${a.individual_id}`)}>
+              <Text style={styles.name}>{a.individual_name ?? "Someone"}</Text>
+              <Text style={styles.meta}>View profile</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onUndo(a.id)}
+              disabled={resolvingId === a.id}
+              hitSlop={8}
+              style={styles.undoStandalone}
+            >
+              <Text style={styles.undoText}>{resolvingId === a.id ? "Undoing…" : "Undo approval"}</Text>
+            </Pressable>
+          </View>
         ))}
       </ScrollView>
+
+      <ConfirmDialog
+        visible={!!confirmRejectId}
+        title="Reject this member request?"
+        message="They'll be notified their request wasn't approved. You can undo this afterward if needed."
+        confirmLabel="Reject"
+        destructive
+        busy={resolvingId === confirmRejectId}
+        onConfirm={() => confirmRejectId && onResolve(confirmRejectId, false)}
+        onCancel={() => setConfirmRejectId(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -151,5 +200,38 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  resolvedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  statusPill: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.iconBgGreen,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+  },
+  statusPillRejected: {
+    backgroundColor: colors.iconBgGray,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.accentDark,
+  },
+  statusTextRejected: {
+    color: colors.textMuted,
+  },
+  undoText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.accentDark,
+  },
+  undoStandalone: {
+    marginTop: 10,
+    alignSelf: "flex-start",
   },
 });

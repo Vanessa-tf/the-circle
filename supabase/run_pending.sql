@@ -325,6 +325,9 @@ create policy "Users can submit work for tasks"
 -- No update policy for anyone — all status changes go through
 -- resolve_task_submission() below, which runs as security definer.
 
+alter table public.credits add column if not exists source_submission_id uuid
+  references public.task_submissions (id) on delete set null;
+
 create or replace function public.resolve_task_submission(p_submission_id uuid, p_approve boolean)
 returns table (status text)
 language plpgsql
@@ -366,14 +369,15 @@ begin
       else 'Employer verified'
     end;
 
-    insert into public.credits (user_id, title, skill_category, points, verified_by, org)
+    insert into public.credits (user_id, title, skill_category, points, verified_by, org, source_submission_id)
     values (
       v_submission.user_id,
       v_task.title,
       v_task.skill_category,
       v_task.points,
       v_verified_by,
-      coalesce(v_org_name, 'Verified organization')
+      coalesce(v_org_name, 'Verified organization'),
+      v_submission.id
     );
 
     return query select 'approved'::text;
@@ -1182,3 +1186,116 @@ on conflict (name) do nothing;
 --   ('Pitch Communication Workshop', 'Communication', 15, 'Institution verified', 'iHub Nairobi', now() - interval '40 days'),
 --   ('Product Launch Execution', 'Execution', 35, 'Employer verified', 'Sable Fintech', now() - interval '53 days')
 -- ) as v(title, skill_category, points, verified_by, org, awarded_at);
+
+-- =====================================================================
+-- From undo-decisions.sql
+-- =====================================================================
+
+create or replace function public.undo_task_submission_resolution(p_submission_id uuid)
+returns table (status text)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_submission record;
+  v_task record;
+begin
+  select * into v_submission from public.task_submissions where id = p_submission_id for update;
+
+  if not found then
+    raise exception 'Submission not found';
+  end if;
+
+  select * into v_task from public.tasks where id = v_submission.task_id;
+
+  if v_task.org_id <> auth.uid() then
+    raise exception 'Not authorized to undo this decision';
+  end if;
+
+  if v_submission.status = 'pending' then
+    return query select v_submission.status;
+    return;
+  end if;
+
+  if v_submission.status = 'approved' then
+    delete from public.credits where source_submission_id = v_submission.id;
+  end if;
+
+  update public.task_submissions
+  set status = 'pending', resolved_at = null
+  where id = v_submission.id;
+
+  return query select 'pending'::text;
+end;
+$$;
+
+grant execute on function public.undo_task_submission_resolution(uuid) to authenticated;
+
+create or replace function public.undo_application_resolution(p_application_id uuid)
+returns table (status text)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_application record;
+  v_listing record;
+begin
+  select * into v_application from public.applications where id = p_application_id for update;
+
+  if not found then
+    raise exception 'Application not found';
+  end if;
+
+  select * into v_listing from public.listings where id = v_application.listing_id;
+
+  if v_listing.owner_id is null or v_listing.owner_id <> auth.uid() then
+    raise exception 'Not authorized to undo this decision';
+  end if;
+
+  if v_application.status = 'applied' then
+    return query select v_application.status;
+    return;
+  end if;
+
+  update public.applications
+  set status = 'applied', resolved_at = null
+  where id = v_application.id;
+
+  return query select 'applied'::text;
+end;
+$$;
+
+grant execute on function public.undo_application_resolution(uuid) to authenticated;
+
+create or replace function public.undo_affiliation_resolution(p_affiliation_id uuid)
+returns table (status text)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_affiliation record;
+begin
+  select * into v_affiliation from public.affiliations where id = p_affiliation_id for update;
+
+  if not found then
+    raise exception 'Affiliation request not found';
+  end if;
+
+  if v_affiliation.org_id <> auth.uid() then
+    raise exception 'Not authorized to undo this decision';
+  end if;
+
+  if v_affiliation.status = 'pending' then
+    return query select v_affiliation.status;
+    return;
+  end if;
+
+  update public.affiliations
+  set status = 'pending', resolved_at = null
+  where id = v_affiliation.id;
+
+  return query select 'pending'::text;
+end;
+$$;
+
+grant execute on function public.undo_affiliation_resolution(uuid) to authenticated;

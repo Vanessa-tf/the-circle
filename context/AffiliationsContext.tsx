@@ -23,6 +23,7 @@ type AffiliationsContextValue = {
   refresh: () => Promise<void>;
   requestAffiliation: (orgId: string) => Promise<void>;
   resolveAffiliation: (affiliationId: string, approve: boolean) => Promise<void>;
+  undoAffiliationResolution: (affiliationId: string) => Promise<void>;
 };
 
 const AffiliationsContext = createContext<AffiliationsContextValue | undefined>(undefined);
@@ -132,6 +133,17 @@ export function AffiliationsProvider({ children }: { children: React.ReactNode }
     [fetchAll]
   );
 
+  const undoAffiliationResolution = useCallback(
+    async (affiliationId: string) => {
+      const { error } = await supabase.rpc("undo_affiliation_resolution", {
+        p_affiliation_id: affiliationId,
+      });
+      if (error) throw error;
+      await fetchAll();
+    },
+    [fetchAll]
+  );
+
   return (
     <AffiliationsContext.Provider
       value={{
@@ -141,6 +153,7 @@ export function AffiliationsProvider({ children }: { children: React.ReactNode }
         refresh: fetchAll,
         requestAffiliation,
         resolveAffiliation,
+        undoAffiliationResolution,
       }}
     >
       {children}

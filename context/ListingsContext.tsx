@@ -76,6 +76,7 @@ type ListingsContextValue = {
   createListing: (input: NewListingInput) => Promise<Listing>;
   closeListing: (listingId: string) => Promise<void>;
   resolveApplication: (applicationId: string, approve: boolean) => Promise<void>;
+  undoApplicationResolution: (applicationId: string) => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -260,6 +261,17 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
     [fetchAll]
   );
 
+  const undoApplicationResolution = useCallback(
+    async (applicationId: string) => {
+      const { error } = await supabase.rpc("undo_application_resolution", {
+        p_application_id: applicationId,
+      });
+      if (error) throw error;
+      await fetchAll();
+    },
+    [fetchAll]
+  );
+
   return (
     <ListingsContext.Provider
       value={{
@@ -274,6 +286,7 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
         createListing,
         closeListing,
         resolveApplication,
+        undoApplicationResolution,
         refresh: fetchAll,
       }}
     >
